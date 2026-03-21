@@ -1,0 +1,5 @@
+# .gitignore
+backend/*.so
+.env*
+node_modules/
+.next/
