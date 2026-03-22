@@ -1,8 +1,7 @@
 module github.com/lila_tictactoe/backend
 
-go 1.26.1
+go 1.25.5
 
-require (
-	github.com/heroiclabs/nakama-common v1.45.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
-)
+require github.com/heroiclabs/nakama-common v1.44.2
+
+require google.golang.org/protobuf v1.36.11 // indirect
