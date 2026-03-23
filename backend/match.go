@@ -29,8 +29,16 @@ type MovePayload struct {
 }
 
 type StatePayload struct {
-	Board [9]int `json:"board"`
-	Mark  int    `json:"mark"`
+	Board    [9]int `json:"board"`
+	Mark     int    `json:"mark"`
+	Deadline int64  `json:"deadline"`
+	Player1  string `json:"player1"`
+	Player2  string `json:"player2"`
+}
+
+type GameOverPayload struct {
+	Winner int    `json:"winner"`
+	Reason string `json:"reason"` // "win", "draw", "timeout", "disconnect"
 }
 
 type Match struct{}
@@ -77,6 +85,9 @@ func (m *Match) MatchJoin(ctx context.Context, logger runtime.Logger, db *sql.DB
 	// If 2 players are here, the game can start!
 	if len(s.presences) == 2 {
 		logger.Info("Two players joined! Game starting.")
+		s.deadline = tick + s.ticksPerTurn
+
+		broadcastState(dispatcher, s)
 	}
 
 	return s
@@ -85,7 +96,23 @@ func (m *Match) MatchJoin(ctx context.Context, logger runtime.Logger, db *sql.DB
 // MatchLeave is called when a player disconnects or quits.
 func (m *Match) MatchLeave(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presences []runtime.Presence) interface{} {
 	s := state.(*MatchState)
+
+	logger.Info("PLAYER LEFT! UserID: %s", presences[0].GetUserId())
+
 	// mandatory rage quit processing
+	if len(s.presences) == 2 {
+		leaverId := presences[0].GetUserId()
+		winnerIndex := 1 // Assume Player 2 wins
+
+		if s.presences[1].GetUserId() == leaverId {
+			winnerIndex = 2 // Actually, Player 2 left, so Player 1 wins
+		}
+
+		broadcastGameOver(dispatcher, winnerIndex, "disconnect")
+		recordWin(ctx, nk, s.presences[winnerIndex-1])
+
+		return nil
+	}
 	return s
 }
 
@@ -93,9 +120,32 @@ func (m *Match) MatchLeave(ctx context.Context, logger runtime.Logger, db *sql.D
 func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, messages []runtime.MatchData) interface{} {
 	s := state.(*MatchState)
 
+	if len(s.presences) < 2 {
+		return s
+	}
+
+	if tick%10 == 0 {
+		logger.Info("--- TICK %d --- Mode: %s, Players: %d, Deadline in: %d ticks", tick, s.mode, len(s.presences), s.deadline-tick)
+	}
+
+	if s.mode == "timed" && tick >= s.deadline {
+		// Current player ran out of time. The OTHER player wins.
+		winner := 2
+		if s.mark == 2 {
+			winner = 1
+		}
+
+		broadcastGameOver(dispatcher, winner, "timeout")
+		recordWin(ctx, nk, s.presences[winner-1])
+
+		return nil // Kill the match
+	}
+
 	for _, message := range messages {
-		// Did a client send a "Make Move" OpCode?
+		// Opcode dictates what the server has to do
 		if message.GetOpCode() == OpCodeMakeMove {
+
+			logger.Info("RECEIVED MOVE from UserID: %s", message.GetUserId())
 
 			// Figure out if the sender is Player 1 (X) or Player 2 (O)
 			senderMark := 1
@@ -124,14 +174,17 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 			// Apply the move to the server's board
 			s.board[payload.Position] = senderMark
 
-			// Check if this move won the game
 			winner := checkWin(s.board)
-			if winner > 0 || isDraw(s.board) {
-				// Broadcast Game Over
-				winMsg, _ := json.Marshal(map[string]int{"winner": winner})
-				dispatcher.BroadcastMessage(OpCodeGameOver, winMsg, nil, nil, true)
+			if winner > 0 {
+				broadcastGameOver(dispatcher, winner, "win")
+				recordWin(ctx, nk, s.presences[winner-1])
 
-				return s // Returning here keeps the state as-is, we will close the match later
+				return nil
+
+			} else if isDraw(s.board) {
+				broadcastGameOver(dispatcher, 0, "draw")
+
+				return nil
 			}
 
 			if s.mark == 1 {
@@ -139,6 +192,7 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 			} else {
 				s.mark = 1
 			}
+			s.deadline = tick + s.ticksPerTurn
 
 			broadcastState(dispatcher, s)
 		}
@@ -150,6 +204,7 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 // MatchTerminate is called when the server shuts down the match.
 func (m *Match) MatchTerminate(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, graceSeconds int) interface{} {
 	return state
+	// will add cleanups if needed
 }
 
 func (m *Match) MatchSignal(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, data string) (interface{}, string) {
@@ -158,13 +213,37 @@ func (m *Match) MatchSignal(ctx context.Context, logger runtime.Logger, db *sql.
 
 // helpers
 func broadcastState(dispatcher runtime.MatchDispatcher, s *MatchState) {
+	p1, p2 := "", ""
+	if len(s.presences) > 0 {
+		p1 = s.presences[0].GetUserId()
+	}
+	if len(s.presences) > 1 {
+		p2 = s.presences[1].GetUserId()
+	}
+
 	payload := StatePayload{
-		Board: s.board,
-		Mark:  s.mark,
+		Board:    s.board,
+		Mark:     s.mark,
+		Deadline: s.deadline,
+		Player1:  p1,
+		Player2:  p2,
 	}
 	bytes, _ := json.Marshal(payload)
-	// Send OpCode 1 to everyone
 	dispatcher.BroadcastMessage(OpCodeUpdateState, bytes, nil, nil, true)
+}
+
+func broadcastGameOver(dispatcher runtime.MatchDispatcher, winner int, reason string) {
+	payload := GameOverPayload{
+		Winner: winner,
+		Reason: reason,
+	}
+	bytes, _ := json.Marshal(payload)
+	dispatcher.BroadcastMessage(OpCodeGameOver, bytes, nil, nil, true)
+}
+
+func recordWin(ctx context.Context, nk runtime.NakamaModule, winner runtime.Presence) {
+	// Add 1 point to the winner's score
+	nk.LeaderboardRecordWrite(ctx, "tictactoe_global", winner.GetUserId(), winner.GetUsername(), 1, 0, nil, nil)
 }
 
 func checkWin(b [9]int) int {
