@@ -1,181 +1,123 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react";
-import { Client, Session, Socket, MatchmakerMatched, MatchData } from "@heroiclabs/nakama-js";
-import { v4 as uuidv4 } from "uuid";
+import { useEffect, useState,  } from "react";
+import { useRouter } from "next/navigation";
+import { useNakama } from "./context/NakamaGlobalContext";
 
-// OP CODE FOR STATE UPDATES
-const OP_UPDATE_STATE = 1;
+export default function Lobby() {
+  const router = useRouter();
+  const { session, socket, status, updateUsername } = useNakama();
 
-// OP CODE FOR MAKING A MOVE
-const OP_MAKE_MOVE = 2;
-
-// OP CODE FOR GAME OVER
-const OP_GAME_OVER = 3;
-
-export default function Home() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [status, setStatus] = useState("Initializing...");
-  const [matchId, setMatchId] = useState<string | null>(null);
-
-  const [board, setBoard] = useState<number[]>([0, 0, 0, 0, 0, 0, 0, 0, 0]); // representing the board in this manner is simple
-  const [currentTurn, setCurrentTurn] = useState<number>(1);
-  const [winner, setWinner] = useState<number | null>(null);
-
-  const clientRef = useRef<Client | null>(null);
-
+  const [isSearching, setIsSearching] = useState(false);
+  const [nicknameInput, setNicknameInput] = useState("");
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
 
   useEffect(() => {
-    // nakama client init
-    const client = new Client(
-      process.env.NEXT_PUBLIC_NAKAMA_SERVER_KEY || "defaultkey",
-      process.env.NEXT_PUBLIC_NAKAMA_HOST || "127.0.0.1",
-      process.env.NEXT_PUBLIC_NAKAMA_PORT || "7350"
-    );
-    clientRef.current = client;
+    if (session?.username) {
+      setNicknameInput(session.username);
+    }
+  }, [session?.username]);
 
-    const authenticate = async () => {
-      try {
-        // silent auth start
-
-        // create creds
-        let deviceId = localStorage.getItem("tictactoe_device_id");
-        if (!deviceId) {
-          deviceId = uuidv4();
-          localStorage.setItem("tictactoe_device_id", deviceId);
-        }
-
-
-        const newSession = await client.authenticateDevice(deviceId, true); // true = create account if missing
-        setSession(newSession);
-
-        // create socket connection
-        const newSocket = client.createSocket(false, false); // useSSL = false, trace = false
-        await newSocket.connect(newSession, true);
-        setSocket(newSocket);
-
-        setStatus(`Connected as: ${newSession.username}`);
-
-        // listen for success event
-        newSocket.onmatchmakermatched = async (matched: MatchmakerMatched) => {
-          setStatus("Match found! Joining server...");
-
-          // When matched, the server gives us a token. We use it to officially join the room.
-          const match = await newSocket.joinMatch(matched.match_id, matched.token);
-          setMatchId(match.match_id);
-          setStatus(`In Match: ${match.match_id}`);
-        };
-
-        newSocket.onmatchdata = (matchData: MatchData) => {
-          const json = new TextDecoder().decode(matchData.data);
-          const payload = JSON.parse(json);
-
-          if (matchData.op_code === OP_UPDATE_STATE) {
-            // Server sent the new board state
-            setBoard(payload.board);
-            setCurrentTurn(payload.mark);
-          }
-          else if (matchData.op_code === OP_GAME_OVER) {
-            // Server announced a winner (0 means draw)
-            setWinner(payload.winner);
-            setStatus(payload.winner === 0 ? "It's a Draw!" : `Player ${payload.winner} Wins!`);
-          }
-        };
-
-      } catch (error) {
-        console.error("Auth error:", error);
-        setStatus("Failed to connect to server.");
-      }
-    };
-
-    authenticate();
-
-    // Cleanup on unmount
-    return () => {
-      // fire dc event - off
-      if (socket) socket.disconnect(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // --- UI Actions ---
-
-  const findMatch = async () => {
+  useEffect(() => {
     if (!socket) return;
-    setStatus("Searching for a player...");
 
-    const query = "*";
-    const minPlayers = 2;
-    const maxPlayers = 2;
+    socket.onmatchmakermatched = async (matched) => {
+      setIsSearching(false);
+      
+      router.push(`/game?matchId=${matched.match_id}`);
+    };
+  }, [socket, router]);
 
-    // hard coded for now
-    const stringProperties = { mode: "classic" };
+  // --- Actions ---
 
+  const handleUpdateName = async () => {
+    if (!nicknameInput.trim() || nicknameInput === session?.username) return;
+    setIsUpdatingName(true);
+    
     try {
-      await socket.addMatchmaker(query, minPlayers, maxPlayers, stringProperties);
+      await updateUsername(nicknameInput);
+      alert("Nickname updated!");
+
     } catch (error) {
-      console.error("Matchmaker error:", error);
-      setStatus("Error joining matchmaking.");
+      console.error(error);
+      alert("Failed to update nickname. Try another one.");
+
+    } finally {
+      setIsUpdatingName(false);
     }
   };
 
-  const renderSquare = (val: number) => {
-    if (val === 1) return <span className="text-blue-500">X</span>;
-    if (val === 2) return <span className="text-red-500">O</span>;
-    return "";
+  const handleFindMatch = async () => {
+    if (!socket) return;
+    setIsSearching(true);
+
+    try {
+      await socket.addMatchmaker("*", 2, 2, { mode: "classic" });
+
+    } catch (error) {
+      console.error("Matchmaker error:", error);
+      setIsSearching(false);
+
+      alert("Failed to join matchmaking.");
+    }
   };
 
-  const handleSquareClick = (index: number) => {
-    // basic client side checks - server also does this
-    if (!socket || !matchId || winner !== null || board[index] !== 0) return;
-
-    const payload = JSON.stringify({ position: index });
-    socket.sendMatchState(matchId, OP_MAKE_MOVE, payload);
-  };
   return (
-    // an ai generated sample ui because i wanted to test the backend e2e
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-900 text-white">
-        <h1 className="text-4xl font-bold mb-4">Tic-Tac-Toe</h1>
-
-        <div className="mb-8 p-4 bg-gray-800 rounded-lg text-center">
-          <p className="text-sm text-gray-400">Status</p>
-          <p className="text-lg text-green-400 font-mono">{status}</p>
+    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-900 text-white">
+      <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700">
+        
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-emerald-400 mb-2">
+            Tic-Tac-Toe
+          </h1>
+          <p className="text-sm font-mono text-gray-400 flex items-center justify-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${status === "Connected" ? "bg-green-500" : "bg-red-500 animate-pulse"}`}></span>
+            {status}
+          </p>
         </div>
 
-        {!matchId ? (
-          <button
-            onClick={findMatch}
-            disabled={!socket || status.includes("Searching")}
-            className="px-8 py-4 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold text-xl disabled:opacity-50 transition-all"
-          >
-            {status.includes("Searching") ? "Looking for opponent..." : "Find Match"}
-          </button>
-        ) : (
-          <div className="flex flex-col items-center">
-
-            {winner === null && (
-              <div className="mb-4 text-xl">
-                Turn: Player {currentTurn} {currentTurn === 1 ? "(X)" : "(O)"}
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-2 bg-gray-700 p-2 rounded-lg">
-              {board.map((val, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSquareClick(index)}
-                  className="w-24 h-24 bg-gray-800 hover:bg-gray-600 flex items-center justify-center text-5xl font-bold rounded"
-                >
-                  {renderSquare(val)}
-                </button>
-              ))}
-            </div>
-
+        {/* Slither.io style Nickname Input */}
+        <div className="mb-8">
+          <label className="block text-sm font-medium text-gray-400 mb-2">Your Nickname</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={nicknameInput}
+              onChange={(e) => setNicknameInput(e.target.value)}
+              className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="Enter a nickname..."
+              disabled={!session || isSearching}
+            />
+            <button
+              onClick={handleUpdateName}
+              disabled={!session || isUpdatingName || isSearching || nicknameInput === session?.username}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {isUpdatingName ? "Saving..." : "Save"}
+            </button>
           </div>
-        )}
-      </main>
-    </div>
+        </div>
+
+        {/* The Big Play Button */}
+        <button
+          onClick={handleFindMatch}
+          disabled={!socket || isSearching || status !== "Connected"}
+          className="w-full py-4 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-lg font-bold text-xl transition-all shadow-lg disabled:opacity-50 relative overflow-hidden group"
+        >
+          {isSearching ? (
+             <span className="flex items-center justify-center gap-3">
+               <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
+                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+               </svg>
+               Searching for Opponent...
+             </span>
+          ) : (
+             "Find Match"
+          )}
+        </button>
+
+      </div>
+    </main>
   );
 }
