@@ -1,8 +1,17 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react";
-import { Client, Session, Socket, MatchmakerMatched } from "@heroiclabs/nakama-js";
+import { Client, Session, Socket, MatchmakerMatched, MatchData } from "@heroiclabs/nakama-js";
 import { v4 as uuidv4 } from "uuid";
+
+// OP CODE FOR STATE UPDATES
+const OP_UPDATE_STATE = 1;
+
+// OP CODE FOR MAKING A MOVE
+const OP_MAKE_MOVE = 2;
+
+// OP CODE FOR GAME OVER
+const OP_GAME_OVER = 3;
 
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
@@ -10,7 +19,12 @@ export default function Home() {
   const [status, setStatus] = useState("Initializing...");
   const [matchId, setMatchId] = useState<string | null>(null);
 
+  const [board, setBoard] = useState<number[]>([0, 0, 0, 0, 0, 0, 0, 0, 0]); // representing the board in this manner is simple
+  const [currentTurn, setCurrentTurn] = useState<number>(1);
+  const [winner, setWinner] = useState<number | null>(null);
+
   const clientRef = useRef<Client | null>(null);
+
 
   useEffect(() => {
     // nakama client init
@@ -53,6 +67,22 @@ export default function Home() {
           setStatus(`In Match: ${match.match_id}`);
         };
 
+        newSocket.onmatchdata = (matchData: MatchData) => {
+          const json = new TextDecoder().decode(matchData.data);
+          const payload = JSON.parse(json);
+
+          if (matchData.op_code === OP_UPDATE_STATE) {
+            // Server sent the new board state
+            setBoard(payload.board);
+            setCurrentTurn(payload.mark);
+          }
+          else if (matchData.op_code === OP_GAME_OVER) {
+            // Server announced a winner (0 means draw)
+            setWinner(payload.winner);
+            setStatus(payload.winner === 0 ? "It's a Draw!" : `Player ${payload.winner} Wins!`);
+          }
+        };
+
       } catch (error) {
         console.error("Auth error:", error);
         setStatus("Failed to connect to server.");
@@ -89,6 +119,20 @@ export default function Home() {
       setStatus("Error joining matchmaking.");
     }
   };
+
+  const renderSquare = (val: number) => {
+    if (val === 1) return <span className="text-blue-500">X</span>;
+    if (val === 2) return <span className="text-red-500">O</span>;
+    return "";
+  };
+
+  const handleSquareClick = (index: number) => {
+    // basic client side checks - server also does this
+    if (!socket || !matchId || winner !== null || board[index] !== 0) return;
+
+    const payload = JSON.stringify({ position: index });
+    socket.sendMatchState(matchId, OP_MAKE_MOVE, payload);
+  };
   return (
     // an ai generated sample ui because i wanted to test the backend e2e
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
@@ -109,11 +153,26 @@ export default function Home() {
             {status.includes("Searching") ? "Looking for opponent..." : "Find Match"}
           </button>
         ) : (
-          <div className="text-center">
-            <p className="text-2xl font-bold mb-4">Game Started!</p>
-            <div className="w-64 h-64 border-4 border-gray-600 rounded grid grid-cols-3 grid-rows-3 text-gray-500 flex items-center justify-center">
-              (Board UI goes here next)
+          <div className="flex flex-col items-center">
+
+            {winner === null && (
+              <div className="mb-4 text-xl">
+                Turn: Player {currentTurn} {currentTurn === 1 ? "(X)" : "(O)"}
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-2 bg-gray-700 p-2 rounded-lg">
+              {board.map((val, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleSquareClick(index)}
+                  className="w-24 h-24 bg-gray-800 hover:bg-gray-600 flex items-center justify-center text-5xl font-bold rounded"
+                >
+                  {renderSquare(val)}
+                </button>
+              ))}
             </div>
+
           </div>
         )}
       </main>
