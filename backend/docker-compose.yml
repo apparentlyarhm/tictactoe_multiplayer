@@ -11,7 +11,8 @@ services:
         /nakama/nakama 
         --database.address "${NAKAMA_DATABASE_ADDRESS}" 
         --logger.level "INFO" 
-        --session.token_expiry_sec 7200 
+        --session.token_expiry_sec 7200
+        --session.refresh_token_expiry_sec 7200
         --socket.server_key "${SERVER_KEY}"
         --console.password "${CONSOLE_PASSWORD}"
     ports:
