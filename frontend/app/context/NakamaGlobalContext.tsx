@@ -71,7 +71,7 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
                     setTimeout(() => initNakamaWithRetry(attempt + 1), 3000);
 
                 } else {
-                    setStatus("Connection Failed. Please refresh the page.");
+                    setStatus("Connection Failed. Matchmaker is possibly offline :(");
                 }
             }
         }

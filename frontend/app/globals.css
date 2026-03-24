@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@heroui/styles"; 
 
 :root {
   --background: #ffffff;
@@ -8,13 +9,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-ibm-plex)
+  --font-mono: var(--font-jb-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #2e232f;
     --foreground: #ededed;
   }
 }
@@ -23,4 +24,51 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.button {
+  cursor: pointer
+}
+
+@layer components {
+  .spinner {
+    @apply animate-spin;
+  }
+
+  .spinner--accent {
+    color: var(--accent);
+  }
+}
+
+.btn-3d {
+  border-radius: 2rem;
+  transition: all 0.12s ease;
+  transform: translateY(0);
+  
+  /* default "raised" state */
+  box-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.25),
+    0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.btn-3d:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 7px 0 rgba(0, 0, 0, 0.25),
+    0 10px 18px rgba(0, 0, 0, 0.25);
+}
+
+.btn-3d:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.25),
+    0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+.btn-3d:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: translateY(0);
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.2);
 }

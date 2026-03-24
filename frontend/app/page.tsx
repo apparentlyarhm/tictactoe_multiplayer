@@ -1,9 +1,23 @@
 "use client"
 
-import { useEffect, useState,  } from "react";
+import { useEffect, useState, } from "react";
 import { useRouter } from "next/navigation";
 import { useNakama } from "./context/NakamaGlobalContext";
+import { main, mono, nunito } from "./config/fonts";
+import clsx from "clsx";
+import { Spinner } from "@heroui/react";
 
+const HELPER_TEXT: string[] = [
+  "Try putting three in a row.",
+  "Corners are stronger than edges. Usually.",
+  "This game has been solved since forever.",
+  "You are about to tie. Accept it.",
+  "Thinking... just kidding, it's random matchmaking.",
+  "Pro tip: Don't lose.",
+  "Winning is optional. Blaming lag is mandatory.",
+  "Somewhere, someone is taking this very seriously.",
+  "mom how do i edit this"
+];
 export default function Lobby() {
   const router = useRouter();
   const { session, socket, status, updateUsername } = useNakama();
@@ -11,6 +25,21 @@ export default function Lobby() {
   const [isSearching, setIsSearching] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   const [isUpdatingName, setIsUpdatingName] = useState(false);
+
+  const [selectedMode, setSelectedMode] = useState<"classic" | "timed">("classic")
+
+  const [tipIndex, setTipIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (session?.username) {
@@ -23,17 +52,27 @@ export default function Lobby() {
 
     socket.onmatchmakermatched = async (matched) => {
       setIsSearching(false);
-      
+
       router.push(`/game?matchId=${matched.match_id}`);
     };
   }, [socket, router]);
+
+  useEffect(() => {
+    if (!isSearching) return;
+
+    const interval = setInterval(() => {
+      setTipIndex((prev) => (prev + 1) % HELPER_TEXT.length);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [isSearching]);
 
   // --- Actions ---
 
   const handleUpdateName = async () => {
     if (!nicknameInput.trim() || nicknameInput === session?.username) return;
     setIsUpdatingName(true);
-    
+
     try {
       await updateUsername(nicknameInput);
       alert("Nickname updated!");
@@ -52,7 +91,7 @@ export default function Lobby() {
     setIsSearching(true);
 
     try {
-      await socket.addMatchmaker("*", 2, 2, { mode: "classic" });
+      await socket.addMatchmaker("*", 2, 2, { mode: selectedMode });
 
     } catch (error) {
       console.error("Matchmaker error:", error);
@@ -62,58 +101,266 @@ export default function Lobby() {
     }
   };
 
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-900 text-white">
-      <div className="max-w-md w-full bg-gray-800 rounded-xl p-8 shadow-2xl border border-gray-700">
-        
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-emerald-400 mb-2">
-            Tic-Tac-Toe
-          </h1>
-          <p className="text-sm font-mono text-gray-400 flex items-center justify-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${status === "Connected" ? "bg-green-500" : "bg-red-500 animate-pulse"}`}></span>
+  // TODO: A LOT OF REPETITION IS PRESENT. I JUST WANT TO GET IT DONE. IMPROVE.
+  if (isMobile) {
+    return (
+      <main className={`${main.className} min-h-screen bg-stone-900 text-stone-200 flex flex-col px-6 py-8`}>
+
+        {/* TOP BAR */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold">Tic Tac Toe thingy</h1>
+
+          <div
+            className={`flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${status === "Connected"
+              ? "border-green-500 text-green-500"
+              : "border-amber-500 text-amber-500"
+              }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${status === "Connected"
+                ? "bg-green-500"
+                : "bg-amber-500 animate-pulse"
+                }`}
+            />
             {status}
-          </p>
+          </div>
         </div>
 
-        {/* Slither.io style Nickname Input */}
-        <div className="mb-8">
-          <label className="block text-sm font-medium text-gray-400 mb-2">Your Nickname</label>
-          <div className="flex gap-2">
+        <div className="flex flex-col gap-6 flex-1">
+
+          <div>
+            <label className="text-sm text-gray-400 mb-2 block">
+              Nickname
+            </label>
+
+            <div className="flex flex-row gap-1">
+
+              <input
+                type="text"
+                value={nicknameInput}
+                onChange={(e) => setNicknameInput(e.target.value)}
+                disabled={!session || isSearching}
+                placeholder="Enter nickname..."
+                className="w-full bg-transparent border border-gray-700 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-stone-600"
+              />
+
+              <button
+                onClick={handleUpdateName}
+                disabled={
+                  !session ||
+                  isUpdatingName ||
+                  isSearching ||
+                  nicknameInput === session?.username
+                }
+                className="px-6 py-3 cursor-pointer rounded-2xl border border-stone-400 hover:border-stone-600 bg-[#B38B6B] hover:bg-[#F5F3F0] hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUpdatingName ? "Saving..." : "Save"}
+              </button>
+
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-400 mb-2 block">
+              Mode
+            </label>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSelectedMode("classic")}
+                className={`btn-3d flex-1 cursor-pointer border border-stone-400 hover:border-stone-600 py-3 rounded-2xl font-semibold transition ${selectedMode === "classic"
+                  ? "bg-[#B38B6B] text-white"
+                  : "bg-[#F5F3F0] text-black"
+                  }`}
+              >
+                Classic
+              </button>
+
+              <button
+                onClick={() => setSelectedMode("timed")}
+                className={`btn-3d flex-1 cursor-pointer border border-stone-400 hover:border-stone-600 py-3 rounded-2xl font-semibold transition ${selectedMode === "timed"
+                  ? "bg-[#B38B6B] text-white"
+                  : "bg-[#F5F3F0] text-black"
+                  }`}
+              >
+                Timed
+              </button>
+            </div>
+          </div>
+
+          {/* SPACER */}
+          <div className="flex-1">
+            {isSearching && (
+              <div className="mt-6 flex flex-col gap-4">
+                <p className="italic text-stone-200">Trying to find a match, not tinder tho</p>
+                <Spinner size="lg" className="text-stone-200" />
+
+                <p className="text-lg text-stone-200 max-w-xs leading-relaxed">
+                  {HELPER_TEXT[tipIndex]}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleFindMatch}
+            disabled={!socket || isSearching || status !== "Connected"}
+            className="btn-3d w-full py-4 text-lg font-bold hover:text-[#2E232F] cursor-pointer bg-[#2E232F] hover:bg-stone-200 flex items-center justify-center gap-3"
+          >
+            {isSearching ? (
+              <>
+                <Spinner size="sm" className="text-stone-200" />
+                Searching...
+              </>
+            ) : (
+              "Find Match"
+            )}
+          </button>
+
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen text-white flex">
+
+      <div
+        className={clsx(
+          "w-3/5 flex flex-col justify-between border-r transition-colors duration-500",
+          isSearching
+            ? "bg-stone-200 text-[#2e232f] border-gray-300"
+            : "bg-[#2e232f] text-stone-200 border-stone-800",
+          main.className
+        )}
+      >
+        {/* TOP CONTENT */}
+        <div className="flex flex-col gap-6 px-10 py-12">
+
+          {/* STATUS CHIP */}
+          <div className={clsx("mb-4", mono.className)}>
+            <div
+              className={clsx(
+                "inline-flex items-center gap-2 py-2 px-6 border text-sm",
+                status === "Connected"
+                  ? "border-green-600 text-green-600"
+                  : "border-amber-600 text-amber-600"
+              )}
+            >
+              <span
+                className={clsx(
+                  "w-2 h-2 rounded-full",
+                  status === "Connected" ? "bg-green-600" : "bg-amber-600"
+                )}
+              />
+              {status}
+            </div>
+          </div>
+
+          <h1
+            className={clsx(
+              "text-6xl font-black tracking-tight",
+              isSearching ? "text-gray-900" : "text-stone-300"
+            )}
+          >
+            Its just tic tac toe bro; Everyone knows how to play it.
+          </h1>
+
+
+          {isSearching && (
+            <div className="mt-6 flex flex-col gap-4">
+              <Spinner size="lg" className="text-[#2e232f]" />
+
+              <p className="text-lg opacity-70 max-w-xs leading-relaxed">
+                {HELPER_TEXT[tipIndex]}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* FOOTER */}
+        <div className="w-full pb-6 text-center text-xs opacity-60">
+          <p>Documentation</p>
+        </div>
+      </div>
+
+      {/* RIGHT PANEL */}
+      <div className={clsx("w-2/5 flex flex-col bg-[#FDFCF9] justify-center px-16 py-12", nunito.className)}>
+        <h1 className="font-black text-stone-700 text-3xl mb-10 ">
+          Configure some options below, then try finding a match!
+        </h1>
+        {/* NICKNAME */}
+        <div className="mb-10">
+          <label className="block text-md text-stone-400 mb-3">
+            Set a nickname!
+          </label>
+
+          <div className="flex gap-3">
             <input
               type="text"
               value={nicknameInput}
               onChange={(e) => setNicknameInput(e.target.value)}
-              className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
-              placeholder="Enter a nickname..."
               disabled={!session || isSearching}
+              placeholder="Enter a nickname..."
+              className="flex-1 font-bold text-[#2E232F] bg-transparent border border-stone-400 rounded-full p-5 text-lg focus:outline-none focus:border-stone-600 transition"
             />
+
             <button
               onClick={handleUpdateName}
-              disabled={!session || isUpdatingName || isSearching || nicknameInput === session?.username}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              disabled={
+                !session ||
+                isUpdatingName ||
+                isSearching ||
+                nicknameInput === session?.username
+              }
+              className="px-6 py-3 cursor-pointer rounded-2xl border border-stone-400 hover:border-stone-600 bg-[#B38B6B] hover:bg-[#F5F3F0] hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUpdatingName ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
 
-        {/* The Big Play Button */}
+        {/* MODE SELECT */}
+        <div className="mb-10">
+          <label className="block text-md text-stone-400 mb-3">
+            Game Mode
+          </label>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setSelectedMode("classic")}
+              className={`btn-3d flex-1 cursor-pointer border border-stone-400 hover:border-stone-600 py-5 rounded-2xl font-semibold transition ${selectedMode === "classic"
+                ? "bg-[#B38B6B] text-white"
+                : "bg-[#F5F3F0] text-black"
+                }`}
+            >
+              Classic
+            </button>
+
+            <button
+              onClick={() => setSelectedMode("timed")}
+              className={`btn-3d flex-1 cursor-pointer border border-stone-400 hover:border-stone-600 py-5 rounded-2xl font-semibold transition ${selectedMode === "timed"
+                ? "bg-[#B38B6B] text-white"
+                : "bg-[#F5F3F0] text-black"
+                }`}
+            >
+              Timed
+            </button>
+          </div>
+        </div>
+
+        {/* FIND MATCH */}
         <button
           onClick={handleFindMatch}
           disabled={!socket || isSearching || status !== "Connected"}
-          className="w-full py-4 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-lg font-bold text-xl transition-all shadow-lg disabled:opacity-50 relative overflow-hidden group"
+          className="btn-3d p-6 text-2xl hover:text-[#2E232F] cursor-pointer bg-[#2E232F] hover:bg-stone-200"
         >
           {isSearching ? (
-             <span className="flex items-center justify-center gap-3">
-               <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
-                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-               </svg>
-               Searching for Opponent...
-             </span>
+            <>
+              Searching...
+            </>
           ) : (
-             "Find Match"
+            "Find a Match"
           )}
         </button>
 
