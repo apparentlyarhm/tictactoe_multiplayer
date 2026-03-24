@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useNakama } from "../context/NakamaGlobalContext";
 import { MatchData, ChannelMessage } from "@heroiclabs/nakama-js";
+import clsx from "clsx";
+import { main, mono, nunito } from "../config/fonts";
 
 const OP_UPDATE_STATE = 1;
 const OP_MAKE_MOVE = 2;
@@ -15,19 +17,42 @@ export default function GameRoom() {
     const { session, socket, status } = useNakama();
 
     const matchId = searchParams.get("matchId");
+    const isDev = searchParams.get("dev") === "true";
+    const [isMobile, setIsMobile] = useState(false);
 
     // Game State
-    const [board, setBoard] = useState<number[]>([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const [board, setBoard] = useState<number[]>(
+        isDev ? [1, 2, 0, 0, 1, 0, 2, 0, 0] : [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    );
+
     const [currentTurn, setCurrentTurn] = useState<number>(1);
-    const [myPlayerNumber, setMyPlayerNumber] = useState<number>(0); // 1 for X, 2 for O
+    const [myPlayerNumber, setMyPlayerNumber] = useState<number>(isDev ? 1 : 0); // 1 for X, 2 for O
     const [winner, setWinner] = useState<number | null>(null);
     const [gameOverReason, setGameOverReason] = useState<string>("");
 
     // Chat State
-    const [chatRoomId, setChatRoomId] = useState<string | null>(null);
-    const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
+    const [chatRoomId, setChatRoomId] = useState<string | null>(isDev ? "mock-room" : null);
+    const [messages, setMessages] = useState<{ sender: string; text: string }[]>(
+        isDev ? [
+            { sender: "Opponent", text: "GLHF!" },
+            { sender: "You", text: "Let's go!" }
+        ] : []
+    );
+
     const [chatInput, setChatInput] = useState("");
     const chatEndRef = useRef<HTMLDivElement>(null);
+
+
+    // Mobile detection
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+
+        handleResize();
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, []);
 
     // Auto-scroll chat to bottom
     useEffect(() => {
@@ -35,6 +60,9 @@ export default function GameRoom() {
     }, [messages]);
 
     useEffect(() => {
+        // global fallback
+        if (isDev) return;
+
         if (!socket || !session || !matchId) {
             if (status !== "Connected") return;
             router.push("/");
@@ -112,6 +140,15 @@ export default function GameRoom() {
 
     const handleSquareClick = (index: number) => {
         console.log("Square clicked:", index);
+
+        if (isDev) {
+            const newBoard = [...board];
+            newBoard[index] = myPlayerNumber;
+            setBoard(newBoard);
+            setCurrentTurn(myPlayerNumber === 1 ? 2 : 1); // Swap turn locally
+            return;
+        }
+
         if (!socket || !matchId || winner !== null || board[index] !== 0 || currentTurn !== myPlayerNumber) {
             console.log("Move blocked - socket:", !!socket, "matchId:", !!matchId, "winner:", winner, "board[index]:", board[index], "currentTurn:", currentTurn, "myPlayerNumber:", myPlayerNumber);
             return;
@@ -126,6 +163,12 @@ export default function GameRoom() {
         e.preventDefault();
         if (!socket || !chatRoomId || !chatInput.trim()) return;
 
+        if (isDev) {
+            setMessages((prev) => [...prev, { sender: "You", text: chatInput }]);
+            setChatInput("");
+            return;
+        }
+
         await socket.writeChatMessage(chatRoomId, { text: chatInput });
         setChatInput("");
     };
@@ -133,92 +176,284 @@ export default function GameRoom() {
     // --- Helpers ---
     const isMyTurn = currentTurn === myPlayerNumber && winner === null;
 
-    return (
-        <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-gray-900 text-white">
+    if (isMobile) {
+        return (
+            <main className="min-h-dvh flex flex-col bg-[#FDFCF9]">
 
-            {/* Header Info */}
-            <div className="mb-8 text-center">
-                <h2 className="text-3xl font-bold mb-2">
-                    {winner !== null ? "Game Over!" : isMyTurn ? "Your Turn!" : "Waiting for Opponent..."}
-                </h2>
-                {winner !== null && (
-                    <p className="text-xl text-yellow-400 font-bold mb-4">
-                        {winner === 0 ? "It's a Draw!" : winner === myPlayerNumber ? "You Win!" : "You Lose!"}
-                        <span className="block text-sm text-gray-400 font-normal mt-1">(Reason: {gameOverReason})</span>
-                    </p>
-                )}
-                <p className="text-gray-400">You are playing as: {myPlayerNumber === 1 ? "X" : "O"}</p>
-            </div>
+                <div
+                    className={clsx(
+                        "w-full flex flex-col items-center bg-[#2e232f] text-stone-200 border-b border-stone-800 px-4 py-6",
+                        main.className
+                    )}
+                >
+                    <div className="flex flex-col items-center text-center">
+                        <h1 className="text-2xl font-black tracking-tight text-stone-300">
+                            {winner !== null
+                                ? winner === 0
+                                    ? "It's a Draw!"
+                                    : winner === myPlayerNumber
+                                        ? "You Win!"
+                                        : "You Lose!"
+                                : isMyTurn
+                                    ? "Make your move."
+                                    : "Waiting for opponent..."}
+                        </h1>
 
-            <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl">
+                        {winner !== null && (
+                            <p className="text-sm text-stone-400 mt-1 font-medium">
+                                Reason: {gameOverReason}
+                            </p>
+                        )}
 
-                {/* Game Board Container (Asset target) */}
-                <div className="flex-1 flex justify-center items-start">
-                    <div className={`grid grid-cols-3 gap-2 bg-gray-700 p-2 rounded-xl transition-all ${!isMyTurn && winner === null ? "opacity-75 scale-95" : ""}`}>
-                        {board.map((val, index) => (
-                            <button
-                                key={index}
-                                onClick={() => handleSquareClick(index)}
-                                disabled={!isMyTurn || val !== 0 || winner !== null}
-                                className={`w-24 h-24 md:w-32 md:h-32 flex items-center justify-center text-5xl font-black rounded-lg transition-colors
-                  ${val === 0 && isMyTurn ? "bg-gray-800 hover:bg-gray-600 cursor-pointer" : "bg-gray-800 cursor-default"}
-                  ${val === 1 ? "text-blue-500" : ""}
-                  ${val === 2 ? "text-red-500" : ""}
-                `}
-                            >
-                                {val === 1 ? "X" : val === 2 ? "O" : ""}
-                            </button>
-                        ))}
+                        <p className="text-stone-500 mt-2 text-sm">
+                            You are playing as:{" "}
+                            <strong className="text-stone-300">
+                                {myPlayerNumber === 1 ? "X" : "O"}
+                            </strong>
+                        </p>
                     </div>
+
+                    {/* GAME BOARD CONTAINER */}
+                    <div className="flex justify-center mt-6">
+                        <div
+                            className={clsx(
+                                "grid grid-cols-3 gap-2 bg-[#3a2c3b] p-3 rounded-2xl border border-stone-700 shadow-xl transition-all",
+                                !isMyTurn && winner === null ? "opacity-80 scale-[0.98]" : ""
+                            )}
+                        >
+                            {board.map((val, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => handleSquareClick(index)}
+                                    disabled={!isMyTurn || val !== 0 || winner !== null}
+                                    className={clsx(
+                                        "w-20 h-20 flex items-center justify-center text-5xl font-black rounded-xl transition-all border",
+                                        val === 0 && isMyTurn && winner === null
+                                            ? "bg-[#2e232f] border-stone-600 active:bg-[#433345]"
+                                            : "bg-[#251c26] border-stone-800 opacity-90",
+                                        val === 1 ? "text-stone-200" : "",
+                                        val === 2 ? "text-[#B38B6B]" : ""
+                                    )}
+                                >
+                                    {val === 1 ? "X" : val === 2 ? "O" : ""}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {winner !== null && (
+                        <button
+                            onClick={() => router.push("/")}
+                            className="mt-6 px-6 py-3 text-sm font-bold rounded-xl border border-stone-400 bg-[#F5F3F0] text-[#2E232F] active:bg-stone-300 transition"
+                        >
+                            Return to Lobby
+                        </button>
+                    )}
                 </div>
 
-                {/* Chat Box Container */}
-                <div className="flex-1 bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-96 shadow-lg">
-                    <div className="p-4 border-b border-gray-700 bg-gray-800 rounded-t-xl font-bold">Match Chat</div>
+                <div
+                    className={clsx(
+                        "w-full flex-1 flex flex-col px-4 py-6",
+                        nunito.className
+                    )}
+                >
+                    <h1 className="font-black text-stone-700 text-xl mb-4">Match Chat</h1>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {/* CHAT MESSAGES AREA */}
+                    <div className="flex-1 min-h-50 max-h-75 overflow-y-auto mb-4 border border-stone-300 rounded-2xl p-4 bg-white shadow-sm flex flex-col space-y-2">
                         {messages.length === 0 ? (
-                            <p className="text-gray-500 text-center text-sm italic mt-4">Say hello to your opponent!</p>
+                            <div className="flex-1 flex items-center justify-center">
+                                <p className="text-stone-400 text-sm italic font-medium text-center">
+                                    Say hello to your opponent!
+                                </p>
+                            </div>
                         ) : (
-                            messages.map((m, i) => (
-                                <div key={i} className="text-sm">
-                                    <span className={`font-bold mr-2 ${m.sender === session?.username ? "text-blue-400" : "text-emerald-400"}`}>
-                                        {m.sender}:
-                                    </span>
-                                    <span className="text-gray-200">{m.text}</span>
-                                </div>
-                            ))
+                            messages.map((m, i) => {
+                                const isMe = m.sender === session?.username;
+                                return (
+                                    <div key={i} className="text-sm">
+                                        <span
+                                            className={clsx(
+                                                "font-black mr-2",
+                                                isMe ? "text-[#B38B6B]" : "text-stone-400"
+                                            )}
+                                        >
+                                            {m.sender}:
+                                        </span>
+                                        <span className="text-stone-700 font-semibold">{m.text}</span>
+                                    </div>
+                                );
+                            })
                         )}
                         <div ref={chatEndRef} />
                     </div>
 
-                    <form onSubmit={sendChatMessage} className="p-3 border-t border-gray-700 flex gap-2">
+                    {/* CHAT INPUT FORM */}
+                    <form onSubmit={sendChatMessage} className="flex gap-2">
                         <input
                             type="text"
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             placeholder="Type a message..."
                             maxLength={100}
-                            className="flex-1 bg-gray-900 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 border border-gray-700 transition-colors"
+                            className="flex-1 font-bold text-[#2E232F] bg-transparent border border-stone-400 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:border-stone-600 transition"
                         />
-                        <button type="submit" disabled={!chatInput.trim()} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">
+                        <button
+                            type="submit"
+                            disabled={!chatInput.trim()}
+                            className="px-5 py-2.5 rounded-full border border-stone-400 bg-[#B38B6B] text-white text-sm font-bold transition disabled:opacity-50"
+                        >
                             Send
                         </button>
                     </form>
                 </div>
+            </main>
+        );
+    }
 
+    return (
+        <main className="min-h-screen text-white flex">
+            <div
+                className={clsx(
+                    "md:w-1/2 lg:w-3/5 flex flex-col justify-between border-r bg-[#2e232f] text-stone-200 border-stone-800 transition-colors duration-500",
+                    main.className
+                )}
+            >
+                <div className="flex flex-col h-full px-6 py-8 lg:px-10 lg:py-12">
+
+                    <div className="flex flex-col">
+                        
+                        <h1 className="text-3xl lg:text-4xl xl:text-5xl font-black tracking-tight text-stone-300">
+                            {winner !== null
+                                ? winner === 0
+                                    ? "It's a Draw!"
+                                    : winner === myPlayerNumber
+                                        ? "You Win!"
+                                        : "You Lose!"
+                                : isMyTurn
+                                    ? "Make your move."
+                                    : "Waiting for opponent..."}
+                        </h1>
+
+                        {winner !== null && (
+                            <p className="text-lg lg:text-xl text-stone-400 mt-2 font-medium">
+                                Reason: {gameOverReason}
+                            </p>
+                        )}
+
+                        <p className="text-stone-500 mt-4 text-base lg:text-lg">
+                            You are playing as:{" "}
+                            <strong className="text-stone-300">
+                                {myPlayerNumber === 1 ? "X" : "O"}
+                            </strong>
+                        </p>
+                    </div>
+
+                    <div className="flex-1 flex justify-center items-center mt-6 lg:mt-8">
+                        <div
+                            className={clsx(
+                                "grid grid-cols-3 gap-2 lg:gap-3 bg-[#3a2c3b] p-3 lg:p-4 rounded-3xl border border-stone-700 shadow-2xl transition-all",
+                                !isMyTurn && winner === null ? "opacity-80 scale-[0.98]" : ""
+                            )}
+                        >
+                            {board.map((val, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => handleSquareClick(index)}
+                                    disabled={!isMyTurn || val !== 0 || winner !== null}
+                                    className={clsx(
+                                        "w-20 h-20 md:w-24 md:h-24 lg:w-32 lg:h-32 xl:w-36 xl:h-36 flex items-center justify-center text-5xl lg:text-6xl xl:text-7xl font-black rounded-2xl transition-all border",
+                                        val === 0 && isMyTurn && winner === null
+                                            ? "bg-[#2e232f] border-stone-600 hover:border-stone-400 hover:bg-[#433345] cursor-pointer shadow-inner"
+                                            : "bg-[#251c26] border-stone-800 cursor-default opacity-90",
+                                        val === 1 ? "text-stone-200" : "",
+                                        val === 2 ? "text-[#B38B6B]" : ""
+                                    )}
+                                >
+                                    {val === 1 ? "X" : val === 2 ? "O" : ""}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* LEAVE BUTTON */}
+                    <div className="mt-6 lg:mt-8 flex justify-start">
+                        {winner !== null && (
+                            <button
+                                onClick={() => router.push("/")}
+                                className="btn-3d px-6 py-3 lg:px-10 lg:py-5 text-lg lg:text-xl font-bold rounded-2xl border border-stone-400 hover:border-stone-600 bg-[#F5F3F0] text-[#2E232F] hover:bg-stone-300 transition"
+                            >
+                                Return to Lobby
+                            </button>
+                        )}
+                    </div>
+
+                </div>
             </div>
 
-            {/* Leave Button */}
-            {winner !== null && (
-                <button
-                    onClick={() => router.push("/")}
-                    className="mt-8 px-8 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold transition-colors"
-                >
-                    Return to Lobby
-                </button>
-            )}
+            <div
+                className={clsx(
+                    "md:w-1/2 lg:w-2/5 flex flex-col bg-[#FDFCF9] px-6 py-8 lg:px-12 lg:py-12 max-h-screen",
+                    nunito.className
+                )}
+            >
+                <h1 className="font-black text-stone-700 text-2xl lg:text-3xl mb-4 lg:mb-8">
+                    Match Chat
+                </h1>
 
+                {/* CHAT MESSAGES AREA */}
+                <div className="flex-1 overflow-y-auto mb-6 lg:mb-8 border border-stone-300 rounded-2xl lg:rounded-3xl p-4 lg:p-6 bg-white shadow-sm flex flex-col space-y-3 lg:space-y-4">
+                    {messages.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center">
+                            <p className="text-stone-400 text-base lg:text-lg italic font-medium">
+                                Say hello to your opponent!
+                            </p>
+                        </div>
+                    ) : (
+                        messages.map((m, i) => {
+                            const isMe = m.sender === session?.username;
+                            return (
+                                <div key={i} className="text-base lg:text-lg">
+                                    <span
+                                        className={clsx(
+                                            "font-black mr-2",
+                                            isMe ? "text-[#B38B6B]" : "text-stone-400"
+                                        )}
+                                    >
+                                        {m.sender}:
+                                    </span>
+                                    <span className="text-stone-700 font-semibold">{m.text}</span>
+                                </div>
+                            );
+                        })
+                    )}
+                    <div ref={chatEndRef} />
+                </div>
+
+                {/* CHAT INPUT FORM */}
+                <div className="shrink-0">
+                    <label className="block text-sm lg:text-md font-bold text-stone-400 mb-2 lg:mb-3">
+                        Send a message
+                    </label>
+                    <form onSubmit={sendChatMessage} className="flex flex-col xl:flex-row gap-3">
+                        <input
+                            type="text"
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Type a message..."
+                            maxLength={100}
+                            className="flex-1 font-bold text-[#2E232F] bg-transparent border border-stone-400 rounded-2xl xl:rounded-full px-4 py-3 lg:px-6 lg:py-4 text-base lg:text-lg focus:outline-none focus:border-stone-600 transition"
+                        />
+                        <button
+                            type="submit"
+                            disabled={!chatInput.trim()}
+                            className="px-6 py-3 lg:px-8 lg:py-4 cursor-pointer rounded-2xl xl:rounded-full border border-stone-400 hover:border-stone-600 bg-[#B38B6B] hover:bg-[#F5F3F0] hover:text-black text-white text-base lg:text-lg font-bold transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        >
+                            Send
+                        </button>
+                    </form>
+                </div>
+            </div>
         </main>
     );
 }
