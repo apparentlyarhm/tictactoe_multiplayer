@@ -25,10 +25,20 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (initialized.current) return;
         initialized.current = true;
+        
+        // on cloud run traffic goes to 8080 via 443, then to 7350 via the caddy container.
+        // also needs ssl.
+        const isDevMode = !!process.env.NEXT_PUBLIC_DEV_MODE;
+        const port = isDevMode 
+            ? (process.env.NEXT_PUBLIC_NAKAMA_PORT || "7350")
+            : "443";
+        const useSsl = isDevMode ? false : true;
+
         const cl = new Client(
             process.env.NEXT_PUBLIC_NAKAMA_SERVER_KEY || "defaultkey",
             process.env.NEXT_PUBLIC_NAKAMA_HOST || "127.0.0.1",
-            process.env.NEXT_PUBLIC_NAKAMA_PORT || "7350"
+            port,
+            useSsl,
         );
         setClient(cl);
 
