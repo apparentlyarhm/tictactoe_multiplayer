@@ -1,0 +1,10 @@
+:8080 {
+    @console host localhost
+    handle @console {
+        reverse_proxy nakama:7351
+    }
+
+    handle {
+        reverse_proxy nakama:7350
+    }
+}

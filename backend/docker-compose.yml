@@ -1,21 +1,23 @@
+## AN EMULATION OF HOW OUR SVC.YAML IS LAID OUT..
 services:
   nakama:
     build: .
-    container_name: ttt_server
-    # This runs the database migration first, then starts the server
-    entrypoint:
-      - "/bin/sh"
-      - "-ecx"
-      - >
-        /nakama/nakama migrate up --database.address "${NAKAMA_DATABASE_ADDRESS}" &&
-        /nakama/nakama 
-        --database.address "${NAKAMA_DATABASE_ADDRESS}" 
-        --logger.level "INFO" 
-        --session.token_expiry_sec 7200
-        --session.refresh_token_expiry_sec 7200
-        --socket.server_key "${SERVER_KEY}"
-        --console.password "${CONSOLE_PASSWORD}"
+    container_name: ttt_srv
+    environment:
+      - NAKAMA_DATABASE_ADDRESS=${NAKAMA_DATABASE_ADDRESS}
+      - SERVER_KEY=${SERVER_KEY}
+      - CONSOLE_PASSWORD=${CONSOLE_PASSWORD}
+    expose:
+      - "7350" # api server
+      - "7351" # console
+      - "7349" # gRPC api server
+      - "7348" # gRPC for console
+  proxy:
+    build:
+      dockerfile: local/Dockerfile.caddy
+    container_name: ttt_pxy
     ports:
-      - "7349:7349" # gRPC
-      - "7350:7350" # HTTP / WebSocket (the frontend connects here)
-      - "7351:7351" # Server-to-Server
+      - "8080:8080"
+    # cloud run doenst have this
+    depends_on:
+      - nakama
