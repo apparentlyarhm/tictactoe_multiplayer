@@ -67,7 +67,9 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
                 const newSession = await cl.authenticateDevice(d, true);
                 setSession(newSession);
 
-                const newSocket = cl.createSocket(false, false);
+                // gave me headache. since http is itself insecure, hardcoding 
+                // false here for useSSl will work EVEN with production server w https.
+                const newSocket = cl.createSocket(useSsl, false);
                 await newSocket.connect(newSession, true);
 
                 setSocket(newSocket);
