@@ -139,7 +139,6 @@ export default function GameRoom() {
     // --- Actions ---
 
     const handleSquareClick = (index: number) => {
-        console.log("Square clicked:", index);
 
         if (isDev) {
             const newBoard = [...board];
@@ -150,12 +149,10 @@ export default function GameRoom() {
         }
 
         if (!socket || !matchId || winner !== null || board[index] !== 0 || currentTurn !== myPlayerNumber) {
-            console.log("Move blocked - socket:", !!socket, "matchId:", !!matchId, "winner:", winner, "board[index]:", board[index], "currentTurn:", currentTurn, "myPlayerNumber:", myPlayerNumber);
             return;
         }
 
         const payload = JSON.stringify({ position: index });
-        console.log("Sending move:", payload);
         socket.sendMatchState(matchId, OP_MAKE_MOVE, payload);
     };
 
