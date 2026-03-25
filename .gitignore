@@ -3,3 +3,6 @@ backend/*.so
 .env*
 node_modules/
 .next/
+
+## the main backend deployment file
+svc.yaml
