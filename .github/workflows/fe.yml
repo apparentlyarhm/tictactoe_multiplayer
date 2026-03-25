@@ -1,0 +1,66 @@
+name: Deploy Frontend (Next.js + Bun → Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install deps
+        run: bun i
+
+      - name: Build
+        env:
+          # Required (must be set in repo secrets)
+          NEXT_PUBLIC_NAKAMA_HOST: ${{ secrets.NEXT_PUBLIC_NAKAMA_HOST }}
+          NEXT_PUBLIC_NAKAMA_SERVER_KEY: ${{ secrets.NEXT_PUBLIC_NAKAMA_SERVER_KEY }}
+        
+          # If NEXT_PUBLIC_NAKAMA_PORT is not set - it defaults to production === 443.
+
+          # Dev mode: only existence is checked, value doesn't matter
+          # If not set, defaults to empty (treated as "off")
+          NEXT_PUBLIC_DEV_MODE: ${{ secrets.NEXT_PUBLIC_DEV_MODE || '' }}
+
+        run: bun run build
+
+      - name: Export static site
+        run: bun run next export
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
