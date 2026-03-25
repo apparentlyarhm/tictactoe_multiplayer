@@ -1,12 +1,8 @@
 name: Deploy Frontend (Next.js + Bun → Pages)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/fe.yml'
-
+  workflow_dispatch:
+    
 permissions:
   contents: read
   pages: write
