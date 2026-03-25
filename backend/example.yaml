@@ -1,0 +1,46 @@
+## SEE https://docs.cloud.google.com/run/docs/reference/yaml/v1
+## THIS is how my main deployment looks.
+
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ttt-nk-prod
+  annotations:
+    run.googleapis.com/ingress: all
+    
+  labels:
+    cloud.googleapis.com/location: asia-southeast1
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: "gen2"
+    spec:
+      serviceAccountName: 
+      # These can start up independently
+      containers:
+      - name: proxy
+        image: asia-southeast1-docker.pkg.dev/wowow-72e2d/ttt-source-backend/caddy-proxy:latest
+        ports:
+        - containerPort: 8080
+
+      # --- Main Nakama Container ---
+      - name: nakama
+        image: asia-southeast1-docker.pkg.dev/wowow-72e2d/ttt-source-backend/nakama:latest
+        env:
+        - name: NAKAMA_DATABASE_ADDRESS
+          valueFrom:
+            secretKeyRef:
+              name: NAKAMA_DB_ADDRESS
+              key: latest
+        - name: SERVER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: NAKAMA_SERVER_KEY
+              key: latest
+        - name: CONSOLE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: NAKAMA_CONSOLE_PASSWORD
+              key: latest

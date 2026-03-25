@@ -1,0 +1,70 @@
+# failed attempt at using tailscale as database
+
+# the problems with container ordering made it so tailscale couldnt even fully configure itself to connect
+# to the tsnet
+
+# TODO: revisit
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ttt-nk-prod
+  labels:
+    cloud.googleapis.com/location: ${region}
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: "gen2"
+    spec:
+      serviceAccountName: ${svc_account}
+      containers:
+      
+      # --- Caddy Reverse Proxy (Public Ingress) ---
+      - name: proxy
+        image: ${region}-docker.pkg.dev/{project_id}/${repo}/caddy-proxy:latest
+        ports:
+        - containerPort: 8080
+
+      # --- Main Nakama Container ---
+      - name: nakama
+        image: ${region}-docker.pkg.dev/{project_id}/${repo}/nakama:latest
+        env:
+        - name: NAKAMA_DATABASE_ADDRESS
+          valueFrom:
+            secretKeyRef:
+              name: NAKAMA_DB_ADDRESS
+              key: latest
+        - name: SERVER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: NAKAMA_SERVER_KEY
+              key: latest
+        - name: CONSOLE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: NAKAMA_CONSOLE_PASSWORD
+              key: latest
+
+      - name: db-proxy
+        image: ${region}-docker.pkg.dev/{project_id}/dh/alpine/socat:latest
+        env:
+        - name: TAILSCALE_HOME_DB_IP
+          value: ${pvt_ip}
+        command: ["sh", "-c"]
+        # This listens on local 5432, and forces the traffic through the Tailscale SOCKS5 proxy
+        args: ["socat TCP4-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork SOCKS5:127.0.0.1:${TAILSCALE_HOME_DB_IP}:5432,socksport=1055"]
+
+      # --- Tailscale Sidecar ---
+      - name: tailscale
+        image: ${region}-docker.pkg.dev/{project_id}/ghcr-rem/tailscale/tailscale:stable
+        env:
+        - name: TS_AUTHKEY
+          valueFrom:
+            secretKeyRef:
+              name: TAILSCALE_AUTH_KEY
+              key: latest
+        - name: TS_USERSPACE
+          value: "true"
+        - name: TS_SOCKS5_SERVER
+          value: "127.0.0.1:1055"
