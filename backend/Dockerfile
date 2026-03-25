@@ -18,3 +18,8 @@ RUN go build --trimpath --buildmode=plugin -o ./backend.so
 FROM heroiclabs/nakama:3.37.0
 
 COPY --from=builder /backend/backend.so /nakama/data/modules/
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
