@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { NakamaProvider } from "./context/NakamaGlobalContext";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "TTT",
@@ -18,9 +19,11 @@ export default function RootLayout({
       className={`h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <NakamaProvider>
-          {children}
-        </NakamaProvider>
+        <Suspense fallback={<p>Loading...</p>}>
+          <NakamaProvider>
+            {children}
+          </NakamaProvider>
+        </Suspense>
       </body>
     </html>
   );
