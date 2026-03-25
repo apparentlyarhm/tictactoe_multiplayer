@@ -109,7 +109,7 @@ func (m *Match) MatchLeave(ctx context.Context, logger runtime.Logger, db *sql.D
 		}
 
 		broadcastGameOver(dispatcher, winnerIndex, "disconnect")
-		recordWin(ctx, nk, s.presences[winnerIndex-1])
+		recordWin(logger, nk, s.presences[winnerIndex-1])
 
 		return nil
 	}
@@ -136,7 +136,8 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 		}
 
 		broadcastGameOver(dispatcher, winner, "timeout")
-		recordWin(ctx, nk, s.presences[winner-1])
+		recordWin(logger, nk, s.presences[winner-1])
+		persistMatch(ctx, logger, nk, s, winner)
 
 		return nil // Kill the match
 	}
@@ -175,14 +176,22 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 			s.board[payload.Position] = senderMark
 
 			winner := checkWin(s.board)
+
 			if winner > 0 {
 				broadcastGameOver(dispatcher, winner, "win")
-				recordWin(ctx, nk, s.presences[winner-1])
 
+				// Add to leaderboard
+				recordWin(logger, nk, s.presences[winner-1])
+
+				// Persist the entire match
+				persistMatch(ctx, logger, nk, s, winner)
 				return nil
 
 			} else if isDraw(s.board) {
 				broadcastGameOver(dispatcher, 0, "draw")
+
+				// Persist the entire match
+				persistMatch(ctx, logger, nk, s, -1)
 
 				return nil
 			}
@@ -241,9 +250,59 @@ func broadcastGameOver(dispatcher runtime.MatchDispatcher, winner int, reason st
 	dispatcher.BroadcastMessage(OpCodeGameOver, bytes, nil, nil, true)
 }
 
-func recordWin(ctx context.Context, nk runtime.NakamaModule, winner runtime.Presence) {
+func persistMatch(ctx context.Context, logger runtime.Logger, nk runtime.NakamaModule, state *MatchState, winner int) {
+	m := ctx.Value(runtime.RUNTIME_CTX_MATCH_ID).(string)
+
+	go func() {
+		bgCtx := context.Background()
+
+		record := map[string]interface{}{
+			"board":   state.board,
+			"winner":  winner,
+			"player1": state.presences[0].GetUserId(),
+			"player2": state.presences[1].GetUserId(),
+		}
+
+		bytes, _ := json.Marshal(record)
+
+		// simplest: use Nakama storage
+		_, err := nk.StorageWrite(bgCtx, []*runtime.StorageWrite{
+			{
+				Collection:      "matches",
+				Key:             m,
+				Value:           string(bytes),
+				PermissionRead:  2,
+				PermissionWrite: 0,
+			},
+		})
+
+		if err != nil {
+			logger.Error("failed to persist match: %v", err)
+		}
+	}()
+}
+
+func recordWin(logger runtime.Logger, nk runtime.NakamaModule, winner runtime.Presence) {
 	// Add 1 point to the winner's score
-	nk.LeaderboardRecordWrite(ctx, "tictactoe_global", winner.GetUserId(), winner.GetUsername(), 1, 0, nil, nil)
+	go func() {
+		bgCtx := context.Background()
+
+		_, err := nk.LeaderboardRecordWrite(
+			bgCtx,
+			"tictactoe_global",
+			winner.GetUserId(),
+			winner.GetUsername(),
+			1,
+			0,
+			nil,
+			nil,
+		)
+
+		if err != nil {
+			// don't break game flow
+			logger.Error("failed to record win: %v", err)
+		}
+	}()
 }
 
 func checkWin(b [9]int) int {
