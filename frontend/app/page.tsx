@@ -115,7 +115,7 @@ export default function Lobby() {
       setShowLeaderboard(false) // laziest toggle
       return
     }
-    
+
     fetchLeaderboard()
       .then(res => { setLeaderboard(res) })
       .catch(e => toast("Failed to fetch the leaderboard.", { variant: "danger" }))
@@ -208,7 +208,7 @@ export default function Lobby() {
 
               <button
                 onClick={leaderboardFetchWrapper}
-                className={`btn-3d flex-1 cursor-pointer border border-stone-400 hover:border-stone-600 py-3 rounded-2xl font-semibold transition bg-[#F5F3F0] text-black`} 
+                className={`btn-3d flex-1 cursor-pointer border border-stone-400 hover:border-stone-600 py-3 rounded-2xl font-semibold transition bg-[#F5F3F0] text-black`}
               >
                 LB
               </button>
@@ -228,34 +228,43 @@ export default function Lobby() {
               </div>
             )}
 
-             {(!isSearching && showLeaderboard && leaderboard) && (
-            <div className=" max-w-md mt-6">
-              <p className="text-lg font-semibold mb-3">
-                {`Leaderboard - ${LEADERBOARD}`}
-              </p>
+            {(!isSearching && showLeaderboard && leaderboard) && (
+              <div className=" max-w-md mt-6">
+                <p className="text-lg font-semibold mb-3">
+                  {`Leaderboard - ${LEADERBOARD}`}
+                </p>
 
-              <div className="flex flex-col gap-2">
-                {leaderboard.map((player, index) => (
-                  <div
-                    key={player.owner_id}
-                    className="flex items-center justify-between px-4 py-2 rounded-md border border-stone-700"
-                  >
-                    <span className="w-6 text-sm font-medium">
-                      {index + 1}
-                    </span>
+                <div className="flex flex-col gap-2">
+                  {leaderboard.map((player, index) => {
+const topStyle =
+                      index === 0
+                        ? "border-l-4 font-black border-amber-400 shadow-amber-400"
+                        : index === 1
+                          ? "border-l-4 font-black border-gray-400 shadow-gray-400"
+                          : index === 2
+                            ? "border-l-4 font-black border-yellow-700 shadow-yellow-400"
+                            : "border-stone-700";
+                  return(
+                    <div
+                      key={player.owner_id}
+                      className={`flex items-center justify-between px-4 py-2 rounded-md border border-stone-700 ${topStyle}`}
+                    >
+                      <span className="w-6 text-sm font-medium">
+                        {index + 1}
+                      </span>
 
-                    <span className="flex-1 ml-3 text-lg truncate">
-                      {player.username || player.owner_id}
-                    </span>
+                      <span className="flex-1 ml-3 text-lg truncate">
+                        {player.username || player.owner_id}
+                      </span>
 
-                    <span className="text-sm font-medium">
-                      {player.score}
-                    </span>
-                  </div>
-                ))}
+                      <span className="text-sm font-medium">
+                        {player.score}
+                      </span>
+                    </div>
+                  )})}
+                </div>
               </div>
-            </div>
-          )}
+            )}
           </div>
 
           <button
@@ -329,24 +338,37 @@ export default function Lobby() {
               </p>
 
               <div className="flex flex-col gap-2">
-                {leaderboard.map((player, index) => (
-                  <div
-                    key={player.owner_id}
-                    className="flex items-center justify-between px-4 py-2 rounded-md border border-stone-700"
-                  >
-                    <span className="w-6 text-sm font-medium">
-                      {index + 1}
-                    </span>
+                <div className="flex flex-col gap-2">
+                  {leaderboard.map((player, index) => {
+                    const topStyle =
+                      index === 0
+                        ? "border-l-4 font-black border-amber-400 shadow-amber-400"
+                        : index === 1
+                          ? "border-l-4 font-black border-gray-400 shadow-gray-400"
+                          : index === 2
+                            ? "border-l-4 font-black border-yellow-700 shadow-yellow-400"
+                            : "border-stone-700";
 
-                    <span className="flex-1 ml-3 text-lg truncate">
-                      {player.username || player.owner_id}
-                    </span>
+                    return (
+                      <div
+                        key={player.owner_id}
+                        className={`flex items-center justify-between px-4 py-2 rounded-md border transition ${topStyle}`}
+                      >
+                        <span className="w-6 text-sm font-medium">
+                          {index + 1}
+                        </span>
 
-                    <span className="text-sm font-medium">
-                      {player.score}
-                    </span>
-                  </div>
-                ))}
+                        <span className="flex-1 ml-3 text-lg truncate">
+                          {player.username || player.owner_id}
+                        </span>
+
+                        <span className="text-sm font-medium">
+                          {player.score}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
