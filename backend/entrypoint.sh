@@ -14,7 +14,7 @@ echo "[INIT] Migration complete, starting Nakama..."
 
 exec /nakama/nakama \
   --database.address "$NAKAMA_DATABASE_ADDRESS" \
-  --logger.level "INFO" \
+  --logger.level "WARN" \
   --session.token_expiry_sec 7200 \
   --session.refresh_token_expiry_sec 7200 \
   --socket.server_key "$SERVER_KEY" \
