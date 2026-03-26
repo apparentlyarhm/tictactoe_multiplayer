@@ -1,8 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
-import { Client, Session, Socket } from "@heroiclabs/nakama-js";
+import { Client, LeaderboardRecord, Session, Socket } from "@heroiclabs/nakama-js";
 import { v4 as uuidv4 } from "uuid";
+import { LEADERBOARD } from "../config/strings";
 
 interface NakamaContextType {
     client: Client | null;
@@ -10,6 +11,7 @@ interface NakamaContextType {
     socket: Socket | null;
     status: string;
     updateUsername: (newName: string) => Promise<void>;
+    fetchLeaderboard: () => Promise<LeaderboardRecord[]>;
 }
 
 const NakamaContext = createContext<NakamaContextType | null>(null);
@@ -25,11 +27,11 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (initialized.current) return;
         initialized.current = true;
-        
+
         // on cloud run traffic goes to 8080 via 443, then to 7350 via the caddy container.
         // also needs ssl.
         const isDevMode = !!process.env.NEXT_PUBLIC_DEV_MODE;
-        const port = isDevMode 
+        const port = isDevMode
             ? (process.env.NEXT_PUBLIC_NAKAMA_PORT || "7350")
             : "443";
         const useSsl = isDevMode ? false : true;
@@ -101,15 +103,15 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
         if (client && session && socket) {
             try {
                 await client.updateAccount(session, { username: uname });
-                
+
                 // Refresh session to get the new username
                 const newSession = await client.sessionRefresh(session);
                 socket.disconnect(false)
-                
+
                 // Reconnect the Realtime Socket with the NEW session
                 // The second parameter 'true' means 'createStatus' (allows presence tracking)
                 await socket.connect(newSession, true);
-                
+
                 setSession(newSession);
             }
             catch (error) {
@@ -118,16 +120,38 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    return (
-        <NakamaContext.Provider value={{ client, session, socket, status, updateUsername }}>
-            {children}
-        </NakamaContext.Provider>
-    );
-};
+    const fetchLeaderboard = async (): Promise<LeaderboardRecord[]> => {
+        if (client && session && socket) {
+            try {
+                const res = await client.listLeaderboardRecords(
+                    session,
+                    LEADERBOARD,
+                    [],
+                    10,   // top 10
+                );
 
-export const useNakama = () => {
-    const context = useContext(NakamaContext);
-    if (!context) throw new Error("useNakama must be used within a NakamaProvider");
+                if (res.records){
+                    return res.records
+                }
 
-    return context;
-};
+                return []
+            } catch (err) {
+                throw new Error("Could not fetch the leaderboard")
+            }
+        }
+        return [];
+    };
+
+        return (
+            <NakamaContext.Provider value={{ client, session, socket, status, updateUsername, fetchLeaderboard }}>
+                {children}
+            </NakamaContext.Provider>
+        );
+    };
+
+    export const useNakama = () => {
+        const context = useContext(NakamaContext);
+        if (!context) throw new Error("useNakama must be used within a NakamaProvider");
+
+        return context;
+    };
