@@ -43,7 +43,6 @@ type GameOverPayload struct {
 
 type Match struct{}
 
-// TODO: implement all logic properly
 func (m *Match) MatchInit(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, params map[string]interface{}) (interface{}, int, string) {
 
 	mode := "classic"
@@ -97,15 +96,17 @@ func (m *Match) MatchJoin(ctx context.Context, logger runtime.Logger, db *sql.DB
 func (m *Match) MatchLeave(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presences []runtime.Presence) interface{} {
 	s := state.(*MatchState)
 
-	logger.Info("PLAYER LEFT! UserID: %s", presences[0].GetUserId())
+	if len(s.presences) < 2 {
+		return nil
+	}
 
 	// mandatory rage quit processing
 	if len(s.presences) == 2 {
 		leaverId := presences[0].GetUserId()
 		winnerIndex := 1 // Assume Player 2 wins
 
-		if s.presences[1].GetUserId() == leaverId {
-			winnerIndex = 2 // Actually, Player 2 left, so Player 1 wins
+		if s.presences[0].GetUserId() == leaverId {
+			winnerIndex = 2 // Player 1 left, so Player 2 (mark 2) wins
 		}
 
 		broadcastGameOver(dispatcher, winnerIndex, "disconnect")
@@ -122,10 +123,6 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 
 	if len(s.presences) < 2 {
 		return s
-	}
-
-	if tick%10 == 0 {
-		logger.Info("--- TICK %d --- Mode: %s, Players: %d, Deadline in: %d ticks", tick, s.mode, len(s.presences), s.deadline-tick)
 	}
 
 	if s.mode == "timed" && tick >= s.deadline {
@@ -148,10 +145,16 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 
 			logger.Info("RECEIVED MOVE from UserID: %s", message.GetUserId())
 
-			// Figure out if the sender is Player 1 (X) or Player 2 (O)
-			senderMark := 1
-			if message.GetUserId() == s.presences[1].GetUserId() {
+			// TODO: improve logic
+			senderMark := 0
+			if message.GetUserId() == s.presences[0].GetUserId() {
+				senderMark = 1
+			} else if message.GetUserId() == s.presences[1].GetUserId() {
 				senderMark = 2
+			}
+
+			if senderMark == 0 {
+				continue // Ignore spectators or ghosts
 			}
 
 			// Is it actually their turn?
@@ -178,16 +181,16 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 			winner := checkWin(s.board)
 
 			if winner > 0 {
-				broadcastGameOver(dispatcher, winner, "win")
+				broadcastState(dispatcher, s)                // show state to everyone
+				broadcastGameOver(dispatcher, winner, "win") // send a win condition
 
-				// Add to leaderboard
-				recordWin(logger, nk, s.presences[winner-1])
+				recordWin(logger, nk, s.presences[winner-1]) // Add to leaderboards
+				persistMatch(ctx, logger, nk, s, winner)     // Persist the entire match
 
-				// Persist the entire match
-				persistMatch(ctx, logger, nk, s, winner)
 				return nil
 
 			} else if isDraw(s.board) {
+				broadcastState(dispatcher, s) // show state to everyone
 				broadcastGameOver(dispatcher, 0, "draw")
 
 				// Persist the entire match
