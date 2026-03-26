@@ -7,6 +7,11 @@ metadata:
   name: ttt-nk-prod
   annotations:
     run.googleapis.com/ingress: all
+    run.googleapis.com/cpu-throttling: true # request based billing, can change to true for instance based.
+    autoscaling.knative.dev/minScale: 1
+    autoscaling.knative.dev/maxScale: 1
+    # attempt to fix split mm
+    run.googleapis.com/startup-cpu-boost: true
 
   labels:
     cloud.googleapis.com/location: ${region}
