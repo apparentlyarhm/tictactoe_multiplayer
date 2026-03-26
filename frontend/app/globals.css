@@ -22,8 +22,6 @@
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
 .button {
@@ -37,6 +35,10 @@ body {
 
   .spinner--accent {
     color: var(--accent);
+  }
+
+  .toast {
+    @apply rounded-3xl bg-[#1b1b1b];
   }
 }
 

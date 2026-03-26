@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useNakama } from "./context/NakamaGlobalContext";
 import { main, mono, nunito } from "./config/fonts";
 import clsx from "clsx";
-import { Spinner } from "@heroui/react";
+import { Spinner, toast } from "@heroui/react";
 
 const HELPER_TEXT: string[] = [
   "Try putting three in a row.",
@@ -75,11 +75,11 @@ export default function Lobby() {
 
     try {
       await updateUsername(nicknameInput);
-      alert("Nickname updated!");
+      toast("Nickname Updated!", {variant:"success"})
 
     } catch (error) {
       console.error(error);
-      alert("Failed to update nickname. Try another one.");
+      toast("Couldnt update username", {variant:"danger"})
 
     } finally {
       setIsUpdatingName(false);
@@ -97,7 +97,7 @@ export default function Lobby() {
       console.error("Matchmaker error:", error);
       setIsSearching(false);
 
-      alert("Failed to join matchmaking.");
+      toast("Failed to join matchmaking", {variant:"danger"})
     }
   };
 

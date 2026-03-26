@@ -6,6 +6,7 @@ import { useNakama } from "../context/NakamaGlobalContext";
 import { MatchData, ChannelMessage } from "@heroiclabs/nakama-js";
 import clsx from "clsx";
 import { main, mono, nunito } from "../config/fonts";
+import { toast } from "@heroui/react";
 
 const OP_UPDATE_STATE = 1;
 const OP_MAKE_MOVE = 2;
@@ -74,14 +75,18 @@ export default function GameRoom() {
             try {
                 const match = await socket.joinMatch(matchId);
 
-                console.log(match)
                 // Join the Native Chat Room (Room Type 1)
                 const chatRoom = await socket.joinChat(matchId, 1, false, false);
                 setChatRoomId(chatRoom.id);
 
             } catch (error) {
-                console.log("Failed to join match:", error);
-                alert("Match expired or invalid ::" + error);
+                toast.danger("Could not join the match", {
+                        actionProps: {
+                          children: "Dismiss",
+                          onPress: () => toast.clear(),
+                          variant: "tertiary",
+                        },
+                      })
 
                 router.push("/");
             }
@@ -119,6 +124,12 @@ export default function GameRoom() {
             } else if (matchData.op_code === OP_GAME_OVER) {
                 setWinner(payload.winner);
                 setGameOverReason(payload.reason);
+            
+                toast.info("Match ended. Redirecting to lobby in 10 seconds...");
+                
+                setTimeout(() => {
+                    router.push("/");
+                }, 10000);
             }
         };
 
@@ -145,6 +156,7 @@ export default function GameRoom() {
             newBoard[index] = myPlayerNumber;
             setBoard(newBoard);
             setCurrentTurn(myPlayerNumber === 1 ? 2 : 1); // Swap turn locally
+            
             return;
         }
 
