@@ -5,8 +5,16 @@ import { Suspense } from "react";
 import { Toast, toast } from '@heroui/react';
 
 export const metadata: Metadata = {
-  title: "TTT",
-  description: "tic tac toe thingy",
+  title: "T3",
+  description: "Multiplayer Tic Tac Toe with chat and.. nothing else..",
+  openGraph: {
+    title: "T3",
+    description: "Multiplayer Tic Tac Toe with chat and.. nothing else..",
+    url: "https://t3.arhm.dev",
+    images: "https://t3.arhm.dev/og.png",
+    type: "website",
+    locale: "en-IN",
+  },
 };
 
 export default function RootLayout({
