@@ -97,12 +97,24 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const updateUsername = async (uname: string) => {
-        if (client && session) {
-            await client.updateAccount(session, { username: uname });
-
-            // Refresh session to get the new username
-            const newSession = await client.sessionRefresh(session);
-            setSession(newSession);
+        // errors are handled upstream
+        if (client && session && socket) {
+            try {
+                await client.updateAccount(session, { username: uname });
+                
+                // Refresh session to get the new username
+                const newSession = await client.sessionRefresh(session);
+                socket.disconnect(false)
+                
+                // Reconnect the Realtime Socket with the NEW session
+                // The second parameter 'true' means 'createStatus' (allows presence tracking)
+                await socket.connect(newSession, true);
+                
+                setSession(newSession);
+            }
+            catch (error) {
+                throw new Error("Couldnt update name..")
+            }
         }
     };
 
