@@ -38,4 +38,4 @@ Anyways i ended up opting for a free db at [neondb](https://neon.com/) which eli
 
 So, to summarise, This is how it is deployed:
 
-![](/media/arch.png)
+![](/backend/media/arch.png)
