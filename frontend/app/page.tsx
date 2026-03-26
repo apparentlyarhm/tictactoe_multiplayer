@@ -6,6 +6,9 @@ import { useNakama } from "./context/NakamaGlobalContext";
 import { main, mono, nunito } from "./config/fonts";
 import clsx from "clsx";
 import { Spinner, toast } from "@heroui/react";
+import { LeaderboardRecord } from "@heroiclabs/nakama-js";
+import { LEADERBOARD } from "./config/strings";
+
 
 const HELPER_TEXT: string[] = [
   "Try putting three in a row.",
@@ -20,7 +23,7 @@ const HELPER_TEXT: string[] = [
 ];
 export default function Lobby() {
   const router = useRouter();
-  const { session, socket, status, updateUsername } = useNakama();
+  const { session, socket, status, updateUsername, fetchLeaderboard } = useNakama();
 
   const [isSearching, setIsSearching] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
@@ -30,6 +33,10 @@ export default function Lobby() {
 
   const [tipIndex, setTipIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardRecord[] | null>(null)
+
 
   useEffect(() => {
     const handleResize = () => {
@@ -75,11 +82,11 @@ export default function Lobby() {
 
     try {
       await updateUsername(nicknameInput);
-      toast("Nickname Updated!", {variant:"success"})
+      toast("Nickname Updated!", { variant: "success" })
 
     } catch (error) {
       console.error(error);
-      toast("Couldnt update username", {variant:"danger"})
+      toast("Couldnt update username", { variant: "danger" })
 
     } finally {
       setIsUpdatingName(false);
@@ -97,8 +104,21 @@ export default function Lobby() {
       console.error("Matchmaker error:", error);
       setIsSearching(false);
 
-      toast("Failed to join matchmaking", {variant:"danger"})
+      toast("Failed to join matchmaking", { variant: "danger" })
     }
+  };
+
+  const leaderboardFetchWrapper = async () => {
+    setShowLeaderboard(true)
+
+    if (showLeaderboard) {
+      setShowLeaderboard(false) // laziest toggle
+      return
+    }
+    
+    fetchLeaderboard()
+      .then(res => { setLeaderboard(res) })
+      .catch(e => toast("Failed to fetch the leaderboard.", { variant: "danger" }))
   };
 
   // TODO: A LOT OF REPETITION IS PRESENT. I JUST WANT TO GET IT DONE. IMPROVE.
@@ -185,6 +205,13 @@ export default function Lobby() {
               >
                 Timed
               </button>
+
+              <button
+                onClick={leaderboardFetchWrapper}
+                className={`btn-3d flex-1 cursor-pointer border border-stone-400 hover:border-stone-600 py-3 rounded-2xl font-semibold transition bg-[#F5F3F0] text-black`} 
+              >
+                LB
+              </button>
             </div>
           </div>
 
@@ -200,6 +227,35 @@ export default function Lobby() {
                 </p>
               </div>
             )}
+
+             {(!isSearching && showLeaderboard && leaderboard) && (
+            <div className=" max-w-md mt-6">
+              <p className="text-lg font-semibold mb-3">
+                {`Leaderboard - ${LEADERBOARD}`}
+              </p>
+
+              <div className="flex flex-col gap-2">
+                {leaderboard.map((player, index) => (
+                  <div
+                    key={player.owner_id}
+                    className="flex items-center justify-between px-4 py-2 rounded-md border border-stone-700"
+                  >
+                    <span className="w-6 text-sm font-medium">
+                      {index + 1}
+                    </span>
+
+                    <span className="flex-1 ml-3 text-lg truncate">
+                      {player.username || player.owner_id}
+                    </span>
+
+                    <span className="text-sm font-medium">
+                      {player.score}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           </div>
 
           <button
@@ -266,6 +322,35 @@ export default function Lobby() {
             Its just tic tac toe bro; Everyone knows how to play it.
           </h1>
 
+          {(!isSearching && showLeaderboard && leaderboard) && (
+            <div className=" max-w-md mt-6">
+              <p className="text-lg font-semibold mb-3">
+                {`Leaderboard - ${LEADERBOARD}`}
+              </p>
+
+              <div className="flex flex-col gap-2">
+                {leaderboard.map((player, index) => (
+                  <div
+                    key={player.owner_id}
+                    className="flex items-center justify-between px-4 py-2 rounded-md border border-stone-700"
+                  >
+                    <span className="w-6 text-sm font-medium">
+                      {index + 1}
+                    </span>
+
+                    <span className="flex-1 ml-3 text-lg truncate">
+                      {player.username || player.owner_id}
+                    </span>
+
+                    <span className="text-sm font-medium">
+                      {player.score}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
 
           {isSearching && (
             <div className="mt-6 flex flex-col gap-4">
@@ -279,8 +364,19 @@ export default function Lobby() {
         </div>
 
         {/* FOOTER */}
-        <div className="w-full pb-6 text-center text-xs opacity-60">
-          <p>Documentation</p>
+        <div className="w-full pb-6 px-10 flex flex-row gap-3">
+          <button
+            onClick={leaderboardFetchWrapper}
+            className="text-xs opacity-60 hover:opacity-100 transition underline cursor-pointer"
+          >
+            Show Leaderboard
+          </button>
+          <a
+            href="https://github.com/apparentlyarhm/tictactoe_multiplayer/tree/master/backend"
+            className="text-xs opacity-60 hover:opacity-100 transition underline"
+          >
+            Documentation
+          </a>
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import { MatchData, ChannelMessage } from "@heroiclabs/nakama-js";
 import clsx from "clsx";
 import { main, mono, nunito } from "../config/fonts";
 import { toast } from "@heroui/react";
+import { DesktopClock } from "../components/game-clock";
 
 const OP_UPDATE_STATE = 1;
 const OP_MAKE_MOVE = 2;
@@ -20,6 +21,12 @@ export default function GameRoom() {
     const matchId = searchParams.get("matchId");
     const isDev = searchParams.get("dev") === "true";
     const [isMobile, setIsMobile] = useState(false);
+
+    const [chatNotification, setChatNotification] = useState(false);
+
+
+    const [gameMode, setGameMode] = useState<"classic" | "timed">("classic");
+    const [deadlineMs, setDeadlineMs] = useState<number>(0);
 
     // Game State
     const [board, setBoard] = useState<number[]>(
@@ -73,21 +80,14 @@ export default function GameRoom() {
 
         const joinGameAndChat = async () => {
             try {
-                const match = await socket.joinMatch(matchId);
+                await socket.joinMatch(matchId);
 
                 // Join the Native Chat Room (Room Type 1)
                 const chatRoom = await socket.joinChat(matchId, 1, false, false);
                 setChatRoomId(chatRoom.id);
 
             } catch (error) {
-                toast.danger("Could not join the match", {
-                        actionProps: {
-                          children: "Dismiss",
-                          onPress: () => toast.clear(),
-                          variant: "tertiary",
-                        },
-                      })
-
+                toast.danger("Could not join the match")
                 router.push("/");
             }
         };
@@ -100,14 +100,22 @@ export default function GameRoom() {
         socket.onmatchdata = (matchData: MatchData) => {
             const payload = JSON.parse(new TextDecoder().decode(matchData.data));
 
-            // MatchData here corresponds to `MatchState` which is 
-            // presences    []runtime.Presence 
+            // server is the authority, use it to determine what mode this is.
+
+            // TODO: keep a watch on this. this state update happens very frequently
+            setGameMode(payload.mode);
+            // ^^
+
+            if (payload.deadline_ms) {
+                setDeadlineMs(payload.deadline_ms);
+            }
+
+            // MatchData here corresponds to `StatePayload` which is 
             // board        [9]int             
             // turnCount    int              
             // mark         int                
             // mode         string           
             // deadline     int64           
-            // ticksPerTurn int64              
             if (matchData.op_code === OP_UPDATE_STATE) {
                 setBoard(payload.board);
                 setCurrentTurn(payload.mark);
@@ -124,9 +132,9 @@ export default function GameRoom() {
             } else if (matchData.op_code === OP_GAME_OVER) {
                 setWinner(payload.winner);
                 setGameOverReason(payload.reason);
-            
+
                 toast.info("Match ended. Redirecting to lobby in 10 seconds...");
-                
+
                 setTimeout(() => {
                     router.push("/");
                 }, 10000);
@@ -156,7 +164,7 @@ export default function GameRoom() {
             newBoard[index] = myPlayerNumber;
             setBoard(newBoard);
             setCurrentTurn(myPlayerNumber === 1 ? 2 : 1); // Swap turn locally
-            
+
             return;
         }
 
@@ -180,6 +188,11 @@ export default function GameRoom() {
 
         await socket.writeChatMessage(chatRoomId, { text: chatInput });
         setChatInput("");
+
+        if (!chatNotification) {
+            toast("Chat is not monitored or saved, you have been warned!")
+        }
+        setChatNotification(true)
     };
 
     // --- Helpers ---
@@ -195,7 +208,7 @@ export default function GameRoom() {
                         main.className
                     )}
                 >
-                    <div className="flex flex-col items-center text-center">
+                    <div className="flex flex-col justify-between text-center">
                         <h1 className="text-2xl font-black tracking-tight text-stone-300">
                             {winner !== null
                                 ? winner === 0
@@ -331,18 +344,26 @@ export default function GameRoom() {
                 <div className="flex flex-col h-full px-6 py-8 lg:px-10 lg:py-12">
 
                     <div className="flex flex-col">
-                        
-                        <h1 className="text-3xl lg:text-4xl xl:text-5xl font-black tracking-tight text-stone-300">
-                            {winner !== null
-                                ? winner === 0
-                                    ? "It's a Draw!"
-                                    : winner === myPlayerNumber
-                                        ? "You Win!"
-                                        : "You Lose!"
-                                : isMyTurn
-                                    ? "Make your move."
-                                    : "Waiting for opponent..."}
-                        </h1>
+
+                        <div className="flex flex-row items-center gap-4 lg:gap-6">
+                            <h1 className="text-3xl lg:text-4xl xl:text-5xl font-black tracking-tight text-stone-300">
+                                {winner !== null
+                                    ? winner === 0
+                                        ? "It's a Draw!"
+                                        : winner === myPlayerNumber
+                                            ? "You Win!"
+                                            : "You Lose!"
+                                    : isMyTurn
+                                        ? "Make your move."
+                                        : "Waiting for opponent..."}
+                            </h1>
+
+                            <DesktopClock
+                                gameMode={gameMode}
+                                deadlineMs={deadlineMs}
+                                isActiveTurn={currentTurn === 1}
+                            />
+                        </div>
 
                         {winner !== null && (
                             <p className="text-lg lg:text-xl text-stone-400 mt-2 font-medium">
