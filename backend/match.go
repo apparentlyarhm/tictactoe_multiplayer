@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/heroiclabs/nakama-common/runtime"
 )
@@ -12,6 +13,8 @@ const (
 	OpCodeUpdateState = 1
 	OpCodeMakeMove    = 2
 	OpCodeGameOver    = 3
+	TickRate          = 10
+	TicksPerTurn      = 100
 )
 
 type MatchState struct {
@@ -22,6 +25,7 @@ type MatchState struct {
 	mode         string             // "classic" or "timed"
 	deadline     int64              // The server tick when the current player runs out of time
 	ticksPerTurn int64              // E.g. 30 seconds * 10 ticks = 300 ticks
+	deadlineMs   int64              // ms value of the deadline to keep clocks in sync
 }
 
 type MovePayload struct {
@@ -29,11 +33,13 @@ type MovePayload struct {
 }
 
 type StatePayload struct {
-	Board    [9]int `json:"board"`
-	Mark     int    `json:"mark"`
-	Deadline int64  `json:"deadline"`
-	Player1  string `json:"player1"`
-	Player2  string `json:"player2"`
+	Board      [9]int `json:"board"`
+	Mark       int    `json:"mark"`
+	Mode       string `json:"mode"`
+	Deadline   int64  `json:"deadline"`
+	Player1    string `json:"player1"`
+	Player2    string `json:"player2"`
+	DeadlineMs int64  `json:"deadline_ms"`
 }
 
 type GameOverPayload struct {
@@ -50,21 +56,19 @@ func (m *Match) MatchInit(ctx context.Context, logger runtime.Logger, db *sql.DB
 		mode = params["mode"].(string)
 	}
 
-	tickRate := 10
-
 	state := &MatchState{
 		presences:    make([]runtime.Presence, 0, 2),
 		board:        [9]int{},
 		turnCount:    0,
 		mark:         1,
 		mode:         mode,
-		ticksPerTurn: 30 * int64(tickRate),
+		ticksPerTurn: TicksPerTurn * int64(TickRate),
 		deadline:     0,
+		deadlineMs:   0,
 	}
 
 	label := "tictactoe"
-
-	return state, tickRate, label
+	return state, TickRate, label
 }
 
 func (m *Match) MatchJoinAttempt(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presence runtime.Presence, metadata map[string]string) (interface{}, bool, string) {
@@ -123,6 +127,17 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 
 	if len(s.presences) < 2 {
 		return s
+	}
+
+	// TODO: watch
+	if s.deadline == 0 {
+		s.deadline = tick + s.ticksPerTurn
+
+		duration := time.Duration(s.ticksPerTurn/TickRate) * time.Second
+		s.deadlineMs = time.Now().Add(duration).UnixMilli()
+
+		// Broadcast the initial state so the frontend knows the game started
+		broadcastState(dispatcher, s)
 	}
 
 	if s.mode == "timed" && tick >= s.deadline {
@@ -206,6 +221,9 @@ func (m *Match) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB
 			}
 			s.deadline = tick + s.ticksPerTurn
 
+			duration := time.Duration(s.ticksPerTurn/TickRate) * time.Second
+			s.deadlineMs = time.Now().Add(duration).UnixMilli()
+
 			broadcastState(dispatcher, s)
 		}
 	}
@@ -234,11 +252,13 @@ func broadcastState(dispatcher runtime.MatchDispatcher, s *MatchState) {
 	}
 
 	payload := StatePayload{
-		Board:    s.board,
-		Mark:     s.mark,
-		Deadline: s.deadline,
-		Player1:  p1,
-		Player2:  p2,
+		Board:      s.board,
+		Mark:       s.mark,
+		Deadline:   s.deadline,
+		DeadlineMs: s.deadlineMs,
+		Mode:       s.mode,
+		Player1:    p1,
+		Player2:    p2,
 	}
 	bytes, _ := json.Marshal(payload)
 	dispatcher.BroadcastMessage(OpCodeUpdateState, bytes, nil, nil, true)

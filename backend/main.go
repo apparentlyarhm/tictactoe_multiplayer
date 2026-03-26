@@ -42,7 +42,6 @@ func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 }
 
 func MatchmakerMatched(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, entries []runtime.MatchmakerEntry) (string, error) {
-	logger.Info("Matchmaker matched 2 players! Spinning up a match...")
 
 	// We can read if they wanted "timed" or "classic" from the matchmaker entries
 	mode := "classic"
