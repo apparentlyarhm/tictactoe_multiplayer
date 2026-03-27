@@ -14,7 +14,7 @@ const (
 	OpCodeMakeMove    = 2
 	OpCodeGameOver    = 3
 	TickRate          = 10
-	TicksPerTurn      = 100
+	TicksPerTurn      = 20
 )
 
 type MatchState struct {
@@ -89,6 +89,9 @@ func (m *Match) MatchJoin(ctx context.Context, logger runtime.Logger, db *sql.DB
 	if len(s.presences) == 2 {
 		logger.Info("Two players joined! Game starting.")
 		s.deadline = tick + s.ticksPerTurn
+
+		duration := time.Duration(s.ticksPerTurn/TickRate) * time.Second
+		s.deadlineMs = time.Now().Add(duration).UnixMilli()
 
 		broadcastState(dispatcher, s)
 	}
