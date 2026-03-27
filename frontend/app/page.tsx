@@ -7,21 +7,9 @@ import { main, mono, nunito } from "./config/fonts";
 import clsx from "clsx";
 import { Spinner, toast } from "@heroui/react";
 import { LeaderboardRecord } from "@heroiclabs/nakama-js";
-import { LEADERBOARD } from "./config/strings";
+import { HELPER_TEXT, LEADERBOARD } from "./config/strings";
 import { MatchFoundDialog } from "./components/match-found";
 
-
-const HELPER_TEXT: string[] = [
-  "Try putting three in a row.",
-  "Corners are stronger than edges. Usually.",
-  "This game has been solved since forever.",
-  "You are about to tie. Accept it.",
-  "Thinking... just kidding, it's random matchmaking.",
-  "Pro tip: Don't lose.",
-  "Winning is optional. Blaming lag is mandatory.",
-  "Somewhere, someone is taking this very seriously.",
-  "mom how do i edit this"
-];
 export default function Lobby() {
   const router = useRouter();
   const { session, socket, status, updateUsername, fetchLeaderboard } = useNakama();
@@ -60,13 +48,13 @@ export default function Lobby() {
   }, [session?.username]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !session) return;
 
     socket.onmatchmakermatched = async (matched) => {
       setIsSearching(false);
 
       const opponent = matched.users.find(
-        (u) => u.presence.user_id !== session?.username
+        (u) => u.presence.username !== session.username
       );
 
       setOpp(opponent?.presence.username || "Opponent");
@@ -492,9 +480,7 @@ export default function Lobby() {
           className="btn-3d p-6 text-2xl hover:text-[#2E232F] cursor-pointer bg-[#2E232F] hover:bg-stone-200"
         >
           {isSearching ? (
-            <>
-              Searching...
-            </>
+             " Searching..."
           ) : (
             "Find a Match"
           )}
