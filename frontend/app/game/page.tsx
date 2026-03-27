@@ -5,9 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useNakama } from "../context/NakamaGlobalContext";
 import { MatchData, ChannelMessage } from "@heroiclabs/nakama-js";
 import clsx from "clsx";
-import { main, mono, nunito } from "../config/fonts";
+import { main, nunito } from "../config/fonts";
 import { toast } from "@heroui/react";
-import { DesktopClock } from "../components/game-clock";
+import { DesktopClock, MobileClock } from "../components/game-clock";
 
 const OP_UPDATE_STATE = 1;
 const OP_MAKE_MOVE = 2;
@@ -99,7 +99,6 @@ export default function GameRoom() {
         // Listen for game loop data
         socket.onmatchdata = (matchData: MatchData) => {
             const payload = JSON.parse(new TextDecoder().decode(matchData.data));
-
             // server is the authority, use it to determine what mode this is.
 
             // TODO: keep a watch on this. this state update happens very frequently
@@ -131,7 +130,7 @@ export default function GameRoom() {
                 // reason - string
             } else if (matchData.op_code === OP_GAME_OVER) {
                 setWinner(payload.winner);
-                setGameOverReason(payload.reason);
+                setGameOverReason(payload.reason);;
 
                 toast.info("Match ended. Redirecting to lobby in 10 seconds...");
 
@@ -220,6 +219,12 @@ export default function GameRoom() {
                                     ? "Make your move."
                                     : "Waiting for opponent..."}
                         </h1>
+
+                        <MobileClock
+                            gameMode={gameMode}
+                            deadlineMs={deadlineMs}
+                            isActiveTurn={myPlayerNumber === currentTurn}
+                        />
 
                         {winner !== null && (
                             <p className="text-sm text-stone-400 mt-1 font-medium">
@@ -361,7 +366,7 @@ export default function GameRoom() {
                             <DesktopClock
                                 gameMode={gameMode}
                                 deadlineMs={deadlineMs}
-                                isActiveTurn={currentTurn === 1}
+                                isActiveTurn={myPlayerNumber === currentTurn}
                             />
                         </div>
 
