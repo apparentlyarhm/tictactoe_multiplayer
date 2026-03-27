@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { Client, LeaderboardRecord, Session, Socket } from "@heroiclabs/nakama-js";
 import { v4 as uuidv4 } from "uuid";
-import { LEADERBOARD } from "../config/strings";
+import { ADJECTIVES, LEADERBOARD, NAMES } from "../config/strings";
 
 interface NakamaContextType {
     client: Client | null;
@@ -23,6 +23,18 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
     const [status, setStatus] = useState("Initializing...");
 
     const initialized = useRef(false);
+
+    function generateNameFromId(id: string) {
+        // simple deterministic-ish picks
+        const hash = id.replace(/-/g, "");
+
+        const adjIndex = parseInt(hash.slice(0, 4), 16) % ADJECTIVES.length;
+        const nameIndex = parseInt(hash.slice(4, 8), 16) % NAMES.length;
+
+        const suffix = hash.slice(-4).toUpperCase();
+
+        return `${ADJECTIVES[adjIndex]}${NAMES[nameIndex]}-${suffix}`;
+    }
 
     useEffect(() => {
         if (initialized.current) return;
@@ -47,7 +59,7 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
         let d = localStorage.getItem("ttt_did");
 
         if (!d) {
-            d = uuidv4();
+            d = generateNameFromId(uuidv4());
             localStorage.setItem("ttt_did", d);
         }
 
@@ -66,7 +78,7 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
                     setStatus("Connecting...");
                 }
 
-                const newSession = await cl.authenticateDevice(d, true);
+                const newSession = await cl.authenticateDevice(d, true, d);
                 setSession(newSession);
 
                 // gave me headache. since http is itself insecure, hardcoding 
@@ -130,7 +142,7 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
                     10,   // top 10
                 );
 
-                if (res.records){
+                if (res.records) {
                     return res.records
                 }
 
@@ -142,16 +154,16 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
         return [];
     };
 
-        return (
-            <NakamaContext.Provider value={{ client, session, socket, status, updateUsername, fetchLeaderboard }}>
-                {children}
-            </NakamaContext.Provider>
-        );
-    };
+    return (
+        <NakamaContext.Provider value={{ client, session, socket, status, updateUsername, fetchLeaderboard }}>
+            {children}
+        </NakamaContext.Provider>
+    );
+};
 
-    export const useNakama = () => {
-        const context = useContext(NakamaContext);
-        if (!context) throw new Error("useNakama must be used within a NakamaProvider");
+export const useNakama = () => {
+    const context = useContext(NakamaContext);
+    if (!context) throw new Error("useNakama must be used within a NakamaProvider");
 
-        return context;
-    };
+    return context;
+};
