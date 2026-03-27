@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from "r
 import { Client, LeaderboardRecord, Session, Socket } from "@heroiclabs/nakama-js";
 import { v4 as uuidv4 } from "uuid";
 import { ADJECTIVES, LEADERBOARD, NAMES } from "../config/strings";
+import { toast } from "@heroui/react";
 
 interface NakamaContextType {
     client: Client | null;
@@ -35,6 +36,28 @@ export const NakamaProvider = ({ children }: { children: React.ReactNode }) => {
 
         return `${ADJECTIVES[adjIndex]}${NAMES[nameIndex]}-${suffix}`;
     }
+
+
+    // TODO: keep a watch on this
+    useEffect(() => {
+        if (!socket) return;
+
+        socket.ondisconnect = (evt) => {
+            console.log("Disconnected", evt);
+            toast.danger("Connection lost");
+
+            setStatus("Please reload")
+            socket.disconnect(false);
+        };
+
+        socket.onerror = (err) => {
+            console.log("Socket error", err);
+            toast.danger("Socket error");
+
+            setStatus("Please reload")
+            socket.disconnect(false);
+        };
+    }, [socket]);
 
     useEffect(() => {
         if (initialized.current) return;
