@@ -8,6 +8,7 @@ import clsx from "clsx";
 import { Spinner, toast } from "@heroui/react";
 import { LeaderboardRecord } from "@heroiclabs/nakama-js";
 import { LEADERBOARD } from "./config/strings";
+import { MatchFoundDialog } from "./components/match-found";
 
 
 const HELPER_TEXT: string[] = [
@@ -33,6 +34,10 @@ export default function Lobby() {
 
   const [tipIndex, setTipIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+
+  const [matchFound, setMatchFound] = useState(false);
+  const [matchId, setMatchId] = useState("");
+  const [opp, setOpp] = useState("");
 
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [leaderboard, setLeaderboard] = useState<LeaderboardRecord[] | null>(null)
@@ -60,7 +65,13 @@ export default function Lobby() {
     socket.onmatchmakermatched = async (matched) => {
       setIsSearching(false);
 
-      router.push(`/game?matchId=${matched.match_id}`);
+      const opponent = matched.users.find(
+        (u) => u.presence.user_id !== session?.username
+      );
+
+      setOpp(opponent?.presence.username || "Opponent");
+      setMatchId(matched.match_id);
+      setMatchFound(true);
     };
   }, [socket, router]);
 
@@ -80,32 +91,31 @@ export default function Lobby() {
     if (!nicknameInput.trim() || nicknameInput === session?.username) return;
     setIsUpdatingName(true);
 
-    try {
-      await updateUsername(nicknameInput);
-      toast("Nickname Updated!", { variant: "success" })
-
-    } catch (error) {
-      console.error(error);
-      toast("Couldnt update username", { variant: "danger" })
-
-    } finally {
-      setIsUpdatingName(false);
-    }
+    updateUsername(nicknameInput)
+      .then(_ => {
+        toast("Nickname Updated!", { variant: "success" })
+      })
+      .catch(e => {
+        console.error(e);
+        toast("Couldnt update username", { variant: "danger" })
+      })
+      .finally(() => {
+        setIsUpdatingName(false)
+      })
   };
 
   const handleFindMatch = async () => {
     if (!socket) return;
     setIsSearching(true);
 
-    try {
-      await socket.addMatchmaker("*", 2, 2, { mode: selectedMode });
+    socket.addMatchmaker("*", 2, 2, { mode: selectedMode })
+      .then()
+      .catch(e => {
+        console.error("Matchmaker error:", e);
+        setIsSearching(false);
 
-    } catch (error) {
-      console.error("Matchmaker error:", error);
-      setIsSearching(false);
-
-      toast("Failed to join matchmaking", { variant: "danger" })
-    }
+        toast("Failed to join matchmaking", { variant: "danger" })
+      })
   };
 
   const leaderboardFetchWrapper = async () => {
@@ -236,7 +246,7 @@ export default function Lobby() {
 
                 <div className="flex flex-col gap-2">
                   {leaderboard.map((player, index) => {
-const topStyle =
+                    const topStyle =
                       index === 0
                         ? "border-l-4 font-black border-amber-400 shadow-amber-400"
                         : index === 1
@@ -244,24 +254,25 @@ const topStyle =
                           : index === 2
                             ? "border-l-4 font-black border-yellow-700 shadow-yellow-400"
                             : "border-stone-700";
-                  return(
-                    <div
-                      key={player.owner_id}
-                      className={`flex items-center justify-between px-4 py-2 rounded-md border border-stone-700 ${topStyle}`}
-                    >
-                      <span className="w-6 text-sm font-medium">
-                        {index + 1}
-                      </span>
+                    return (
+                      <div
+                        key={player.owner_id}
+                        className={`flex items-center justify-between px-4 py-2 rounded-md border border-stone-700 ${topStyle}`}
+                      >
+                        <span className="w-6 text-sm font-medium">
+                          {index + 1}
+                        </span>
 
-                      <span className="flex-1 ml-3 text-lg truncate">
-                        {player.username || player.owner_id}
-                      </span>
+                        <span className="flex-1 ml-3 text-lg truncate">
+                          {player.username || player.owner_id}
+                        </span>
 
-                      <span className="text-sm font-medium">
-                        {player.score}
-                      </span>
-                    </div>
-                  )})}
+                        <span className="text-sm font-medium">
+                          {player.score}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -281,6 +292,13 @@ const topStyle =
               "Find Match"
             )}
           </button>
+
+          <MatchFoundDialog
+            opponentName={opp}
+            matchId={matchId}
+            isMobile={isMobile}
+            isOpen={matchFound}
+          />
 
         </div>
       </main>
@@ -481,6 +499,13 @@ const topStyle =
             "Find a Match"
           )}
         </button>
+
+        <MatchFoundDialog
+          opponentName={opp}
+          matchId={matchId}
+          isMobile={isMobile}
+          isOpen={matchFound}
+        />
 
       </div>
     </main>
