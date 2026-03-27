@@ -30,9 +30,8 @@ export function MatchFoundDialog({
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          router.push(`/game?matchId=${matchId}`);
-          
           return 0;
+          
         }
         return prev - 1;
       });
@@ -40,6 +39,12 @@ export function MatchFoundDialog({
 
     return () => clearInterval(interval);
   }, [isOpen, matchId, router]);
+
+  useEffect(() => {
+    if (countdown === 0) {
+      router.push(`/game?matchId=${matchId}`);
+    }
+  }, [countdown])
 
   return (
     <Modal isOpen={isOpen}>
@@ -56,7 +61,7 @@ export function MatchFoundDialog({
             <Modal.Body>
               <div className={`flex flex-col items-center justify-center gap-4 py-4`}>
                 <p className="text-md">
-                 <span className="font-semibold">{opponentName} is READY!</span>
+                  <span className="font-semibold">{opponentName} is READY!</span>
                 </p>
 
                 <div className="text-7xl font-bold tracking-tight">
@@ -64,7 +69,7 @@ export function MatchFoundDialog({
                 </div>
 
                 <p className="text-sm">
-                 Brooo it aint that deep its just tic tac toe
+                  Brooo it aint that deep its just tic tac toe
                 </p>
               </div>
             </Modal.Body>
