@@ -29,6 +29,10 @@ spec:
         image: ${region}-docker.pkg.dev/${p_id}/${repo}/caddy-proxy:latest
         ports:
         - containerPort: 8080
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 128Mi
 
       # --- Main Nakama Container ---
       - name: nakama
@@ -49,3 +53,7 @@ spec:
             secretKeyRef:
               name: NAKAMA_CONSOLE_PASSWORD
               key: latest
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
